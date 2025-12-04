@@ -44,47 +44,8 @@
             PieChart, Briefcase, Landmark, CreditCard, 
             MoreHorizontal, Download, Calculator, Coins, RefreshCw,
             Sun, Moon, Target, CalendarClock, CheckCircle, AlertCircle, Save,
-            ChevronLeft, ChevronRight, Calendar, AlertTriangle
+            ChevronLeft, ChevronRight, Calendar, AlertTriangle, Wifi, WifiOff, Link as LinkIcon
         } from 'lucide-react';
-
-        // --- HELPER: SWIPEABLE ITEM ---
-        const SwipeableItem = ({ children, onDelete, onClick, className = "" }) => {
-            const [offsetX, setOffsetX] = useState(0);
-            const startX = useRef(0);
-            const isDragging = useRef(false);
-
-            // Touch Events
-            const handleTouchStart = (e) => { startX.current = e.touches[0].clientX; isDragging.current = true; };
-            const handleTouchMove = (e) => { if (!isDragging.current) return; const diff = e.touches[0].clientX - startX.current; if (diff < 0 && diff > -100) setOffsetX(diff); };
-            const handleTouchEnd = () => { isDragging.current = false; setOffsetX(offsetX < -40 ? -80 : 0); };
-            
-            // Mouse Events
-            const handleMouseDown = (e) => { startX.current = e.clientX; isDragging.current = true; };
-            const handleMouseMove = (e) => { if (!isDragging.current) return; const diff = e.clientX - startX.current; if (diff < 0 && diff > -100) setOffsetX(diff); };
-            const handleMouseUp = () => { isDragging.current = false; setOffsetX(offsetX < -40 ? -80 : 0); };
-
-            const handleClick = (e) => {
-                if (offsetX < -10) { setOffsetX(0); e.stopPropagation(); }
-                else if (Math.abs(offsetX) < 5 && onClick) onClick();
-            };
-
-            return (
-                <div className={`relative overflow-hidden group ${className}`} onMouseLeave={() => { isDragging.current = false; setOffsetX(0); }}>
-                    <div className="absolute top-0 bottom-0 right-0 w-20 bg-rose-500/20 flex items-center justify-center rounded-2xl z-0">
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(); setOffsetX(0); }} className="p-3 bg-rose-500 text-white rounded-full shadow-lg"><Trash2 size={18} /></button>
-                    </div>
-                    <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
-                         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-lg transition-colors"><Trash2 size={14}/></button>
-                    </div>
-                    <div className="relative z-10 transition-transform duration-200 ease-out h-full" style={{ transform: `translateX(${offsetX}px)` }}
-                        onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-                        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
-                        onClick={handleClick}>
-                        {children}
-                    </div>
-                </div>
-            );
-        };
 
         const App = () => {
             // --- 1. CONFIGURATION & STATE ---
@@ -102,11 +63,12 @@
                 accentGradient: "from-emerald-400 to-teal-500",
                 navIconActive: "text-emerald-300",
                 navIconInactive: "text-gray-500",
+                cardHover: "active:bg-white/10",
             } : {
                 mode: 'light',
                 bg: "bg-slate-100", 
-                glassCard: "bg-white shadow-lg border border-slate-100",
-                glassNav: "bg-white/80 backdrop-blur-2xl border-t border-slate-200",
+                glassCard: "bg-white shadow-lg border border-slate-200",
+                glassNav: "bg-white/90 backdrop-blur-2xl border-t border-slate-200",
                 textMain: "text-slate-800",
                 textMuted: "text-slate-500",
                 textHighlight: "text-emerald-600",
@@ -114,6 +76,7 @@
                 accentGradient: "from-emerald-500 to-teal-600",
                 navIconActive: "text-emerald-600",
                 navIconInactive: "text-slate-400",
+                cardHover: "active:bg-slate-50",
             };
 
             const [activeTab, setActiveTab] = useState('accounts'); 
@@ -171,14 +134,11 @@
                 let newAcc = [...accounts];
 
                 newAcc = newAcc.map(acc => {
-                    // Only process if rate > 0
                     if (acc.interestRate > 0) {
                         const lastRun = acc.lastInterestDate || todayStr;
-                        // Prevent multiple runs today
                         if (lastRun !== todayStr) {
                             const [d1, m1, y1] = lastRun.split('/').map(Number);
                             const [d2, m2, y2] = todayStr.split('/').map(Number);
-                            // Calculate days difference
                             const diffTime = Math.abs(new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1));
                             const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
                             
@@ -188,13 +148,9 @@
                                     acc.balance += interest;
                                     interestAdded = true;
                                     newTx.unshift({ 
-                                        id: Date.now() + Math.random(), 
-                                        type: 'income', 
-                                        amount: interest, 
+                                        id: Date.now() + Math.random(), type: 'income', amount: interest, 
                                         cat: CATEGORIES.income.find(c => c.name === 'Interest') || CATEGORIES.income[0], 
-                                        note: `Auto Interest (${acc.name})`, 
-                                        date: todayStr, 
-                                        timestamp: Date.now() 
+                                        note: `Auto Interest (${acc.name})`, date: todayStr, timestamp: Date.now() 
                                     });
                                 }
                                 acc.lastInterestDate = todayStr;
@@ -209,7 +165,7 @@
                     setAccounts(newAcc);
                     setTransactions(newTx);
                 }
-            }, [accounts.length]); // Runs on load
+            }, [accounts.length]);
 
             useEffect(() => {
                 if (recurringRules.length === 0) return;
@@ -240,7 +196,6 @@
             }, [recurringRules]); 
 
             const getTabAmbience = () => {
-                // Adjusted colors for Light Mode to be more visible
                 if (activeTab === 'accounts') return isDarkMode ? { blob1: 'bg-blue-600/20', blob2: 'bg-cyan-500/20' } : { blob1: 'bg-blue-400/30', blob2: 'bg-cyan-400/30' };
                 if (activeTab === 'ledger') return isDarkMode ? { blob1: 'bg-emerald-500/15', blob2: 'bg-teal-600/15' } : { blob1: 'bg-emerald-400/30', blob2: 'bg-teal-400/30' };
                 if (activeTab === 'stocks') return isDarkMode ? { blob1: 'bg-purple-600/20', blob2: 'bg-indigo-500/20' } : { blob1: 'bg-purple-400/30', blob2: 'bg-indigo-400/30' };
@@ -334,7 +289,6 @@
             const handleSaveAccount = () => {
                 if(!accName) return;
                 const bal = parseFloat(accBalance)||0; const rate = parseFloat(accInterest)||0;
-                // Icon logic updated for Pocket
                 let icon = '🏦';
                 if (accType === 'ewallet') icon = '📱';
                 else if (accType === 'cash') icon = '💵';
@@ -419,18 +373,22 @@
                         {activeTab === 'accounts' && <div className="space-y-3">
                             {accounts.length === 0 && <div className={`text-center py-10 text-sm ${THEME.textMuted}`}>No accounts added. Tap + to add one.</div>}
                             {accounts.map(acc => (
-                                <SwipeableItem key={acc.id} onDelete={() => setDeleteTarget({id:acc.id, type:'account'})} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl`}>
-                                    <div className="p-4">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-3"><div className={`text-2xl p-2 rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div><div><h3 className={`font-bold text-sm ${THEME.textMain}`}>{acc.name}</h3>{acc.interestRate > 0 && <span className={`text-[10px] border rounded px-1 ${isDarkMode?'text-emerald-300 border-emerald-500/20':'text-emerald-700 border-emerald-200'}`}>{acc.interestRate}% Int.</span>}</div></div>
-                                            <div className={`font-bold text-lg ${THEME.textMain}`}>{formatMoney(acc.balance)}</div>
+                                <div key={acc.id} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl p-4 cursor-pointer ${THEME.cardHover} transition-all`}>
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`text-2xl p-2 rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div>
+                                            <div>
+                                                <h3 className={`font-bold text-sm ${THEME.textMain}`}>{acc.name}</h3>
+                                                {acc.interestRate > 0 && <span className={`text-[10px] border rounded px-1 ${isDarkMode?'text-emerald-300 border-emerald-500/20':'text-emerald-700 border-emerald-200'}`}>{acc.interestRate}% Int.</span>}
+                                            </div>
                                         </div>
-                                        {acc.interestRate > 0 && <div className={`mt-2 pt-2 border-t flex justify-between items-center ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                                            <span className={`text-[10px] ${THEME.textMuted}`}>Projected Daily Earn</span>
-                                            <DailyInterestLabel principal={acc.balance} rate={acc.interestRate} />
-                                        </div>}
+                                        <div className={`font-bold text-lg ${THEME.textMain}`}>{formatMoney(acc.balance)}</div>
                                     </div>
-                                </SwipeableItem>
+                                    {acc.interestRate > 0 && <div className={`mt-2 pt-2 border-t flex justify-between items-center ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+                                        <span className={`text-[10px] ${THEME.textMuted}`}>Projected Daily Earn</span>
+                                        <DailyInterestLabel principal={acc.balance} rate={acc.interestRate} />
+                                    </div>}
+                                </div>
                             ))}
                         </div>}
 
@@ -448,13 +406,11 @@
                             {groupedTransactions.length === 0 ? <div className={`text-center py-10 ${THEME.textMuted}`}>No records</div> : groupedTransactions.map(g => (
                                 <div key={g.date} className="mb-2">
                                     <div className={`text-[10px] font-bold uppercase tracking-widest mb-2 pl-1 ${THEME.textMuted}`}>{g.displayDate} · {g.dayName}</div>
-                                    <div className="space-y-3">{g.items.map(t => (
-                                        <SwipeableItem key={t.id} onDelete={() => setDeleteTarget({id:t.id, type:'tx'})} onClick={() => openEditTx(t)} className={`${THEME.glassCard} rounded-2xl`}>
-                                            <div className="p-3 flex justify-between items-center">
-                                                <div className="flex gap-3 items-center"><div className={`text-xl w-10 h-10 flex items-center justify-center rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{t.cat?.icon}</div><div><p className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</p><p className={`text-[10px] ${THEME.textMuted}`}>{t.note}</p></div></div>
-                                                <span className={`text-sm font-bold ${t.type==='income'?'text-emerald-500':THEME.textMain}`}>{t.type==='expense'?'-':'+'}{t.amount}</span>
-                                            </div>
-                                        </SwipeableItem>
+                                    <div className="space-y-2">{g.items.map(t => (
+                                        <div key={t.id} onClick={() => openEditTx(t)} className={`${THEME.glassCard} rounded-2xl p-3 flex justify-between items-center cursor-pointer ${THEME.cardHover} transition-all`}>
+                                            <div className="flex gap-3 items-center"><div className={`text-xl w-10 h-10 flex items-center justify-center rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{t.cat?.icon}</div><div><p className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</p><p className={`text-[10px] ${THEME.textMuted}`}>{t.note || '-'}</p></div></div>
+                                            <span className={`text-sm font-bold ${t.type==='income'?'text-emerald-500':THEME.textMain}`}>{t.type==='expense'?'-':'+'}{t.amount}</span>
+                                        </div>
                                     ))}</div>
                                 </div>
                             ))}
@@ -466,12 +422,19 @@
                             {stocks.map(s => {
                                 const mv = s.currentPrice * s.shares; const isGain = s.currentPrice >= s.avgCost;
                                 return (
-                                    <SwipeableItem key={s.id} onDelete={() => setDeleteTarget({id:s.id, type:'stock'})} onClick={() => openEditStock(s)} className={`${THEME.glassCard} rounded-2xl`}>
-                                        <div className="p-4 flex justify-between">
-                                            <div><div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border mb-2 ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div><h3 className={`font-bold text-sm ${THEME.textMain}`}>{s.name}</h3><p className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</p></div>
-                                            <div className="text-right"><div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div><div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div></div>
+                                    <div key={s.id} onClick={() => {setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true);}} className={`${THEME.glassCard} rounded-2xl p-4 flex justify-between items-center cursor-pointer ${THEME.cardHover} transition-all`}>
+                                        <div className="flex items-center gap-4 flex-1">
+                                            <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border mb-2 ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div>
+                                            <div className="flex flex-col">
+                                                <span className={`text-sm font-bold ${THEME.textMain}`}>{s.name}</span>
+                                                <span className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</span>
+                                            </div>
                                         </div>
-                                    </SwipeableItem>
+                                        <div className="text-right">
+                                            <div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div>
+                                            <div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div>
+                                        </div>
+                                    </div>
                                 )
                             })}
                         </div>}
@@ -508,30 +471,39 @@
                                     <div><p className={`text-[10px] font-bold mb-1 ${THEME.textMuted}`}>Date</p><input type="date" onClick={(e)=>e.target.showPicker&&e.target.showPicker()} className={`bg-transparent text-sm outline-none w-28 pl-6 cursor-pointer ${THEME.textMain}`} value={txDate} onChange={e=>setTxDate(e.target.value)}/></div>
                                 </div>
                                 <div className="mb-6 flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">{CATEGORIES[ledgerType].map(c => <button key={c.name} onClick={()=>setSelectedCat(c)} className="flex flex-col items-center gap-2 min-w-[64px] snap-center"><div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border-2 ${selectedCat.name===c.name ? `border-emerald-500/50 ${c.color}` : `border-transparent opacity-50 ${isDarkMode?'bg-white/5':'bg-slate-100'}`}`}>{c.icon}</div><span className="text-[10px]">{c.name}</span></button>)}</div>
-                                <input className={`w-full p-4 rounded-xl text-sm mb-4 outline-none border border-transparent focus:border-current ${THEME.inputBg} ${THEME.textMain}`} placeholder="Note" value={note} onChange={e=>setNote(e.target.value)} />
-                                <button onClick={handleSaveTx} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>Save</button>
+                                <input className={`w-full p-4 rounded-xl text-sm mb-4 outline-none border border-transparent focus:border-current ${THEME.inputBg} ${THEME.textMain}`} placeholder="Note (e.g. Others)" value={note} onChange={e=>setNote(e.target.value)} />
+                                <div className="flex gap-3">
+                                    {editingTx && <button onClick={()=>requestDelete(editingTx.id, 'tx')} className="p-4 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"><Trash2 size={20}/></button>}
+                                    <button onClick={handleSaveTx} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingTx ? 'Update' : 'Save'}</button>
+                                </div>
                             </>}
                             {modalMode === 'account' && <>
                                 <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingAcc ? 'Edit Account' : 'New Account'}</h3>
                                 <div className="space-y-4 mb-6">
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name" value={accName} onChange={e=>setAccName(e.target.value)} />
+                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name (e.g. CIMB)" value={accName} onChange={e=>setAccName(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-4"><select className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={accType} onChange={e=>setAccType(e.target.value)}><option value="bank">Bank</option><option value="ewallet">E-Wallet</option><option value="cash">Cash</option><option value="pocket">Pocket</option><option value="investment">Invest</option></select><input type="number" className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Balance" value={accBalance} onChange={e=>setAccBalance(e.target.value)} /></div>
                                     <input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Interest Rate %" value={accInterest} onChange={e=>setAccInterest(e.target.value)} />
                                 </div>
-                                <button onClick={handleSaveAccount} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>Save</button>
+                                <div className="flex gap-3">
+                                    {editingAcc && <button onClick={()=>requestDelete(editingAcc.id, 'account')} className="p-4 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"><Trash2 size={20}/></button>}
+                                    <button onClick={handleSaveAccount} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingAcc ? 'Update' : 'Save'}</button>
+                                </div>
                             </>}
                             {modalMode === 'stocks' && <>
-                                <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingStock ? 'Edit Stock' : 'Add Stock'}</h3>
+                                <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingStock ? 'Edit Holding' : 'Add Holding'}</h3>
                                 <div className="space-y-4 mb-6">
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Symbol (e.g. 1155.KL)" value={stockSymbol} onChange={e=>setStockSymbol(e.target.value)} />
+                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Stock Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
+                                    <input className={`w-full p-4 rounded-xl outline-none border border-transparent focus:border-indigo-500 transition-colors ${THEME.inputBg} ${THEME.textMain}`} placeholder="Symbol (e.g. 1155.KL)" value={stockSymbol} onChange={e=>setStockSymbol(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Cost</label><input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={stockCost} onChange={e=>setStockCost(e.target.value)} /></div>
                                         <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Units</label><input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={stockShares} onChange={e=>setStockShares(e.target.value)} /></div>
                                     </div>
                                     <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Current Price</label><input type="number" className={`w-full p-4 rounded-xl outline-none border border-dashed border-white/20 ${THEME.inputBg} ${THEME.textMain}`} value={stockPrice} onChange={e=>setStockPrice(e.target.value)} /></div>
                                 </div>
-                                <button onClick={handleSaveStock} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>Save</button>
+                                <div className="flex gap-3">
+                                    {editingStock && <button onClick={()=>requestDelete(editingStock.id, 'stock')} className="p-4 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"><Trash2 size={20}/></button>}
+                                    <button onClick={handleSaveStock} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingStock ? 'Update' : 'Save'}</button>
+                                </div>
                             </>}
                         </div>
                     </div>}
@@ -555,7 +527,6 @@
         root.render(<App />);
     </script>
     
-    <!-- 注册 Service Worker -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
