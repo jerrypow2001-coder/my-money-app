@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Aurora Assets</title>
     
-    <!-- PWA 核心设置：让手机识别为 App -->
     <meta name="theme-color" content="#0B0C15">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -37,7 +36,7 @@
     }
     </script>
 
-    <!-- App Logic (Clean Version) -->
+    <!-- App Logic (Production Build - Clean Data) -->
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
@@ -49,58 +48,10 @@
             ChevronLeft, ChevronRight, Calendar, AlertTriangle, Wifi, WifiOff, Link as LinkIcon
         } from 'lucide-react';
 
-        // --- HELPER: SWIPEABLE ITEM ---
-        const SwipeableItem = ({ children, onDelete, onClick, className = "" }) => {
-            const [offsetX, setOffsetX] = useState(0);
-            const startX = useRef(0);
-            const isDragging = useRef(false);
-
-            const handleTouchStart = (e) => {
-                startX.current = e.touches[0].clientX;
-                isDragging.current = true;
-            };
-            const handleTouchMove = (e) => {
-                if (!isDragging.current) return;
-                const diff = e.touches[0].clientX - startX.current;
-                if (diff < 0 && diff > -100) setOffsetX(diff);
-            };
-            const handleTouchEnd = () => {
-                isDragging.current = false;
-                setOffsetX(offsetX < -40 ? -80 : 0);
-            };
-            // Mouse support for desktop testing
-            const handleMouseDown = (e) => { startX.current = e.clientX; isDragging.current = true; };
-            const handleMouseMove = (e) => { if(!isDragging.current) return; const diff = e.clientX - startX.current; if(diff < 0 && diff > -100) setOffsetX(diff); };
-            const handleMouseUp = () => { isDragging.current = false; setOffsetX(offsetX < -40 ? -80 : 0); };
-
-            const handleClick = (e) => {
-                if (offsetX < -10) { setOffsetX(0); e.stopPropagation(); }
-                else if (Math.abs(offsetX) < 5 && onClick) onClick();
-            };
-
-            return (
-                <div className={`relative overflow-hidden group ${className}`} onMouseLeave={() => { isDragging.current = false; setOffsetX(0); }}>
-                    <div className="absolute top-0 bottom-0 right-0 w-20 bg-rose-500/20 flex items-center justify-center rounded-2xl z-0">
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(); setOffsetX(0); }} className="p-3 bg-rose-500 text-white rounded-full shadow-lg"><Trash2 size={18} /></button>
-                    </div>
-                    <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
-                         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-lg transition-colors"><Trash2 size={14}/></button>
-                    </div>
-                    <div className="relative z-10 transition-transform duration-200 ease-out h-full" style={{ transform: `translateX(${offsetX}px)` }}
-                        onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-                        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
-                        onClick={handleClick}>
-                        {children}
-                    </div>
-                </div>
-            );
-        };
-
         const App = () => {
             // --- 1. CONFIGURATION & STATE ---
             const [isDarkMode, setIsDarkMode] = useState(true);
             
-            // THEME definition must come before return
             const THEME = isDarkMode ? {
                 mode: 'dark',
                 bg: "bg-[#0B0C15]", 
@@ -113,18 +64,22 @@
                 accentGradient: "from-emerald-400 to-teal-500",
                 navIconActive: "text-emerald-300",
                 navIconInactive: "text-gray-500",
+                cardHover: "active:bg-white/10",
+                deleteBtn: "text-rose-500/50 hover:text-rose-500 hover:bg-rose-500/10"
             } : {
                 mode: 'light',
-                bg: "bg-slate-50", 
-                glassCard: "bg-white/70 backdrop-blur-xl border border-white/40 shadow-xl",
+                bg: "bg-slate-50", // Updated to cleaner/brighter background
+                glassCard: "bg-white shadow-lg border border-slate-100",
                 glassNav: "bg-white/80 backdrop-blur-2xl border-t border-slate-200",
                 textMain: "text-slate-800",
                 textMuted: "text-slate-400",
                 textHighlight: "text-emerald-600",
-                inputBg: "bg-slate-200/50",
+                inputBg: "bg-slate-100",
                 accentGradient: "from-emerald-500 to-teal-600",
                 navIconActive: "text-emerald-600",
                 navIconInactive: "text-slate-400",
+                cardHover: "active:bg-slate-50",
+                deleteBtn: "text-slate-300 hover:text-rose-500 hover:bg-rose-50"
             };
 
             const [activeTab, setActiveTab] = useState('accounts'); 
@@ -136,7 +91,7 @@
             const [isFetching, setIsFetching] = useState(false);
             const [lastUpdated, setLastUpdated] = useState(null); 
 
-            // Data (Clean Default State)
+            // Data - CLEAN INITIAL STATE (Empty Arrays)
             const [transactions, setTransactions] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-ledger-pro')) || []; } catch { return []; } });
             const [stocks, setStocks] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-stocks-pro')) || []; } catch { return []; } });
             const [accounts, setAccounts] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-accounts-pro')) || []; } catch { return []; } });
@@ -223,7 +178,7 @@
                 setIsFetching(false);
             };
 
-            // --- 4. EFFECTS & AUTOMATION ---
+            // --- 4. EFFECTS ---
             useEffect(() => {
                 const handleStatusChange = () => setIsOnline(window.navigator.onLine);
                 window.addEventListener('online', handleStatusChange);
@@ -269,7 +224,6 @@
                 let newTxList = [...transactions];
                 let rulesUpdated = false;
                 let newRules = [...recurringRules];
-
                 newRules.forEach((rule, index) => {
                 if (rule.lastRun !== currentMonthStr && today.getDate() >= rule.day) {
                     const exists = newTxList.some(t => {
@@ -288,10 +242,7 @@
                     }
                 }
                 });
-                if (rulesUpdated) {
-                    setTransactions(newTxList);
-                    setRecurringRules(newRules);
-                }
+                if (rulesUpdated) { setTransactions(newTxList); setRecurringRules(newRules); }
             }, [recurringRules]); 
 
             const getTabAmbience = () => {
@@ -321,7 +272,6 @@
             const [accBalance, setAccBalance] = useState('');
             const [accInterest, setAccInterest] = useState('');
             const [accType, setAccType] = useState('bank');
-
             const [newBudgetLimit, setNewBudgetLimit] = useState('');
             const [newRecName, setNewRecName] = useState('');
             const [newRecAmount, setNewRecAmount] = useState('');
@@ -361,24 +311,17 @@
             // --- 7. HANDLERS ---
             const handleExport = () => {
                 if (transactions.length === 0) return alert("No records.");
-                const headers = ['Date', 'Type', 'Category', 'Amount (MYR)', 'Note'];
-                const rows = transactions.map(t => [t.date, t.type, t.cat?.name || 'Unknown', t.amount, `"${t.note||''}"`]);
-                const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `aurora_export_${activeTab}.csv`;
-                link.click();
+                const headers = ['Date', 'Type', 'Category', 'Amount', 'Note'];
+                const rows = transactions.map(t => [t.date, t.type, t.cat?.name, t.amount, `"${t.note}"`]);
+                const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); link.download='export.csv'; link.click();
             };
-
             const handleMonthChange = (direction) => {
                 const newDate = new Date(currentLedgerDate);
                 newDate.setMonth(currentLedgerDate.getMonth() + direction);
                 setCurrentLedgerDate(newDate);
             };
-
-            const openEditTx = (tx) => {
-                setEditingTx(tx); setAmount(tx.amount); setLedgerType(tx.type); setSelectedCat(tx.cat); setNote(tx.note); 
+            const openEditTx = (tx) => { setEditingTx(tx); setAmount(tx.amount); setLedgerType(tx.type); setSelectedCat(tx.cat); setNote(tx.note); 
                 const parts = tx.date.split('/'); if(parts.length===3) setTxDate(`${parts[2]}-${parts[1]}-${parts[0]}`);
                 setModalMode('ledger'); setIsModalOpen(true); 
             };
@@ -401,7 +344,7 @@
                 else setAccounts([...accounts, {id: Date.now(), name: accName, type: accType, balance: bal, interestRate: rate, icon, lastInterestDate: new Date().toLocaleDateString('en-GB')}]);
                 setIsModalOpen(false);
             };
-            const openEditStock = (s) => { setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol || ''); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true); };
+            const openEditStock = (s) => { setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true); };
             const openAddStock = () => { setEditingStock(null); setStockName(''); setStockSymbol(''); setStockShares(''); setStockCost(''); setStockPrice(''); setModalMode('stocks'); setIsModalOpen(true); };
             const handleSaveStock = () => {
                 if(!stockSymbol) return;
@@ -464,37 +407,35 @@
                     <div className="px-6 relative z-10 animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-end mb-4 mt-2">
                             <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white/80' : 'text-slate-700'}`}>
-                                {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics & Budgets' : 'Investments'}
+                                {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics' : 'Investments'}
                             </h2>
-                            <div className="flex items-center gap-2">
-                                {activeTab === 'stocks' && <>
-                                    <button onClick={() => setDataSourceUrl(prompt("Google Sheet CSV Link:") || '')} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode ? 'border-white/20 text-white hover:bg-white/10' : 'border-slate-300 text-slate-600 hover:bg-slate-100'} ${dataSourceUrl ? 'text-emerald-400 border-emerald-500/50' : ''}`} title="Link Google Sheet"><LinkIcon size={14} /></button>
-                                    <button onClick={fetchLivePrices} disabled={!isOnline || isFetching} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode ? 'border-white/20 text-white hover:bg-white/10' : 'border-slate-300 text-slate-600 hover:bg-slate-100'} ${isFetching ? 'animate-spin' : ''}`}><RefreshCw size={14} /></button>
-                                </>}
+                            <div className="flex gap-2">
+                                {activeTab === 'stocks' && <><button onClick={() => setDataSourceUrl(prompt("Google Sheet CSV Link:") || '')} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode ? 'border-white/20 text-white hover:bg-white/10' : 'border-slate-300 text-slate-600 hover:bg-slate-100'} ${dataSourceUrl ? 'text-emerald-400 border-emerald-500/50' : ''}`} title="Link Google Sheet"><LinkIcon size={14} /></button><button onClick={fetchLivePrices} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode?'border-white/20':'border-slate-300'} ${isFetching?'animate-spin':''}`}><RefreshCw size={14}/></button></>}
                                 <button onClick={handleExport} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-emerald-700 bg-emerald-100 border-emerald-200'}`}><Download size={14} /> <span>CSV</span></button>
                             </div>
                         </div>
 
-                        {/* ACCOUNTS TAB */}
+                        {/* ACCOUNTS TAB (Clean Layout) */}
                         {activeTab === 'accounts' && <div className="space-y-3">
                             {accounts.length === 0 && <div className={`text-center py-10 text-sm ${THEME.textMuted}`}>No accounts added. Tap + to add one.</div>}
                             {accounts.map(acc => (
-                                <SwipeableItem key={acc.id} onDelete={() => requestDelete(acc.id, 'account')} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl`}>
-                                    <div className="p-4">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-3"><div className={`text-2xl p-2 rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div><div><h3 className={`font-bold text-sm ${THEME.textMain}`}>{acc.name}</h3>{acc.interestRate > 0 && <span className={`text-[10px] border rounded px-1 ${isDarkMode?'text-emerald-300 border-emerald-500/20':'text-emerald-700 border-emerald-200'}`}>{acc.interestRate}% Int.</span>}</div></div>
-                                            <div className={`font-bold text-lg ${THEME.textMain}`}>{formatMoney(acc.balance)}</div>
+                                <div key={acc.id} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl relative p-4 ${THEME.cardHover} transition-transform cursor-pointer flex justify-between items-center`}>
+                                    {/* Content */}
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <div className={`text-2xl w-12 h-12 flex items-center justify-center rounded-2xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div>
+                                        <div className="flex flex-col">
+                                            <span className={`text-xs font-medium ${THEME.textMuted} uppercase tracking-wide`}>{acc.name}</span>
+                                            <span className={`text-xl font-bold ${THEME.textMain} mt-0.5`}>{formatMoney(acc.balance)}</span>
+                                            {acc.interestRate > 0 && <span className="flex items-center gap-1 text-[10px] text-emerald-400 mt-1"><TrendingUp size={10}/> {acc.interestRate}%</span>}
                                         </div>
-                                        {acc.interestRate > 0 && <div className={`mt-2 pt-2 border-t flex justify-between items-center ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                                            <span className={`text-[10px] ${THEME.textMuted}`}>Projected Daily Earn</span>
-                                            <DailyInterestLabel principal={acc.balance} rate={acc.interestRate} />
-                                        </div>}
                                     </div>
-                                </SwipeableItem>
+                                    {/* Action (Right) */}
+                                    <button onClick={(e) => { e.stopPropagation(); requestDelete(acc.id, 'account'); }} className={`p-2 rounded-xl transition-colors ${THEME.deleteBtn}`}><Trash2 size={16}/></button>
+                                </div>
                             ))}
                         </div>}
 
-                        {/* LEDGER TAB */}
+                        {/* LEDGER TAB (Clean Layout) */}
                         {activeTab === 'ledger' && <div className="space-y-4">
                             <div className={`flex justify-between p-3 rounded-2xl ${isDarkMode?'bg-white/5':'bg-slate-200/50'}`}>
                                 <button onClick={() => handleMonthChange(-1)}><ChevronLeft size={20} className={THEME.textMain}/></button>
@@ -508,19 +449,26 @@
                             {groupedTransactions.length === 0 ? <div className={`text-center py-10 ${THEME.textMuted}`}>No records</div> : groupedTransactions.map(g => (
                                 <div key={g.date} className="mb-2">
                                     <div className={`text-[10px] font-bold uppercase tracking-widest mb-2 pl-1 ${THEME.textMuted}`}>{g.displayDate} · {g.dayName}</div>
-                                    <div className="space-y-3">{g.items.map(t => (
-                                        <SwipeableItem key={t.id} onDelete={() => requestDelete(t.id, 'tx')} onClick={() => openEditTx(t)} className={`${THEME.glassCard} rounded-2xl`}>
-                                            <div className="p-3 flex justify-between items-center">
-                                                <div className="flex gap-3 items-center"><div className={`text-xl w-10 h-10 flex items-center justify-center rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{t.cat?.icon}</div><div><p className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</p><p className={`text-[10px] ${THEME.textMuted}`}>{t.note}</p></div></div>
-                                                <span className={`text-sm font-bold ${t.type==='income'?'text-emerald-500':THEME.textMain}`}>{t.type==='expense'?'-':'+'}{t.amount}</span>
+                                    <div className="space-y-2">{g.items.map(t => (
+                                        <div key={t.id} onClick={() => openEditTx(t)} className={`${THEME.glassCard} rounded-2xl p-3 flex justify-between items-center ${THEME.cardHover} cursor-pointer`}>
+                                            <div className="flex gap-3 items-center">
+                                                <div className={`text-xl w-10 h-10 flex items-center justify-center rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{t.cat?.icon}</div>
+                                                <div className="flex flex-col">
+                                                    <span className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</span>
+                                                    <span className={`text-[10px] ${THEME.textMuted}`}>{t.note || '-'}</span>
+                                                </div>
                                             </div>
-                                        </SwipeableItem>
+                                            <div className="flex items-center gap-4">
+                                                <span className={`text-sm font-bold ${t.type==='income'?'text-emerald-500':THEME.textMain}`}>{t.type==='expense'?'-':'+'}{t.amount}</span>
+                                                <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({id:t.id, type:'tx'}); }} className={`p-1.5 rounded-lg transition-colors ${THEME.deleteBtn}`}><Trash2 size={14}/></button>
+                                            </div>
+                                        </div>
                                     ))}</div>
                                 </div>
                             ))}
                         </div>}
 
-                        {/* STOCKS TAB */}
+                        {/* STOCKS TAB (Clean Layout) */}
                         {activeTab === 'stocks' && <div className="space-y-3">
                             <div className={`flex items-center justify-between px-2 pb-2 text-[10px] ${isOnline ? 'text-emerald-500' : 'text-rose-500'}`}>
                                 <span className="flex items-center gap-1">{isOnline ? <Wifi size={12}/> : <WifiOff size={12}/>} {isOnline ? 'Online' : 'Offline'} {lastUpdated && `· Updated: ${lastUpdated}`}</span>
@@ -530,12 +478,22 @@
                             {stocks.map(s => {
                                 const mv = s.currentPrice * s.shares; const isGain = s.currentPrice >= s.avgCost;
                                 return (
-                                    <SwipeableItem key={s.id} onDelete={() => requestDelete(s.id, 'stock')} onClick={() => openEditStock(s)} className={`${THEME.glassCard} rounded-2xl`}>
-                                        <div className="p-4 flex justify-between">
-                                            <div><div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border mb-2 ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div><h3 className={`font-bold text-sm ${THEME.textMain}`}>{s.name}</h3><p className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</p></div>
-                                            <div className="text-right"><div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div><div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div></div>
+                                    <div key={s.id} onClick={() => {setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true);}} className={`${THEME.glassCard} rounded-2xl p-4 flex justify-between items-center ${THEME.cardHover} cursor-pointer`}>
+                                        <div className="flex items-center gap-4 flex-1">
+                                            <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div>
+                                            <div className="flex flex-col">
+                                                <span className={`text-sm font-bold ${THEME.textMain}`}>{s.name}</span>
+                                                <span className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</span>
+                                            </div>
                                         </div>
-                                    </SwipeableItem>
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-right">
+                                                <div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div>
+                                                <div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div>
+                                            </div>
+                                            <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({id:s.id, type:'stock'}); }} className={`p-2 rounded-xl transition-colors ${THEME.deleteBtn}`}><Trash2 size={16}/></button>
+                                        </div>
+                                    </div>
                                 )
                             })}
                         </div>}
@@ -565,8 +523,6 @@
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setIsModalOpen(false)}></div>
                         <div className={`w-full max-w-md rounded-t-[2.5rem] p-6 relative border-t animate-in slide-in-from-bottom duration-300 ${isDarkMode ? 'bg-[#1A1D2D] border-white/10' : 'bg-white border-slate-200'}`}>
                             <div className={`w-12 h-1 rounded-full mx-auto mb-6 ${isDarkMode?'bg-white/10':'bg-slate-200'}`}></div>
-                            
-                            {/* LEDGER FORM */}
                             {modalMode === 'ledger' && <>
                                 <div className={`flex p-1 rounded-2xl mb-6 ${isDarkMode?'bg-black/20':'bg-slate-100'}`}>{['expense', 'income'].map(t => <button key={t} onClick={()=>{setLedgerType(t); setSelectedCat(CATEGORIES[t][0])}} className={`flex-1 py-3 rounded-xl text-sm font-bold capitalize ${ledgerType===t ? (isDarkMode?'bg-white/10 text-white':'bg-white text-slate-900 shadow') : 'text-gray-500'}`}>{t}</button>)}</div>
                                 <div className="flex items-end gap-2 mb-6">
@@ -574,34 +530,30 @@
                                     <div><p className={`text-[10px] font-bold mb-1 ${THEME.textMuted}`}>Date</p><input type="date" onClick={(e)=>e.target.showPicker&&e.target.showPicker()} className={`bg-transparent text-sm outline-none w-28 pl-6 cursor-pointer ${THEME.textMain}`} value={txDate} onChange={e=>setTxDate(e.target.value)}/></div>
                                 </div>
                                 <div className="mb-6 flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">{CATEGORIES[ledgerType].map(c => <button key={c.name} onClick={()=>setSelectedCat(c)} className="flex flex-col items-center gap-2 min-w-[64px] snap-center"><div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border-2 ${selectedCat.name===c.name ? `border-emerald-500/50 ${c.color}` : `border-transparent opacity-50 ${isDarkMode?'bg-white/5':'bg-slate-100'}`}`}>{c.icon}</div><span className="text-[10px]">{c.name}</span></button>)}</div>
-                                <input className={`w-full p-4 rounded-xl text-sm mb-4 outline-none border border-transparent focus:border-current ${THEME.inputBg} ${THEME.textMain}`} placeholder="Note (e.g. Others)" value={note} onChange={e=>setNote(e.target.value)} />
-                                <button onClick={handleSaveTx} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingTx ? 'Update Transaction' : 'Save Transaction'}</button>
+                                <input className={`w-full p-4 rounded-xl text-sm mb-4 outline-none border border-transparent focus:border-current ${THEME.inputBg} ${THEME.textMain}`} placeholder="Note" value={note} onChange={e=>setNote(e.target.value)} />
+                                <button onClick={handleSaveTx} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>Save</button>
                             </>}
-
-                            {/* ACCOUNT FORM */}
                             {modalMode === 'account' && <>
                                 <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingAcc ? 'Edit Account' : 'New Account'}</h3>
                                 <div className="space-y-4 mb-6">
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name (e.g. CIMB)" value={accName} onChange={e=>setAccName(e.target.value)} />
-                                    <div className="grid grid-cols-2 gap-4"><select className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={accType} onChange={e=>setAccType(e.target.value)}><option value="bank">Bank</option><option value="ewallet">E-Wallet</option><option value="cash">Cash</option><option value="investment">Invest</option></select><input type="number" className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Balance" value={accBalance} onChange={e=>setAccBalance(e.target.value)} /></div>
+                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name" value={accName} onChange={e=>setAccName(e.target.value)} />
+                                    <div className="grid grid-cols-2 gap-4"><select className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={accType} onChange={e=>setAccType(e.target.value)}><option value="bank">Bank</option><option value="ewallet">E-Wallet</option><option value="cash">Cash</option></select><input type="number" className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Balance" value={accBalance} onChange={e=>setAccBalance(e.target.value)} /></div>
                                     <input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Interest Rate %" value={accInterest} onChange={e=>setAccInterest(e.target.value)} />
                                 </div>
-                                <button onClick={handleSaveAccount} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingAcc ? 'Update Account' : 'Add Account'}</button>
+                                <button onClick={handleSaveAccount} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>Save</button>
                             </>}
-
-                            {/* STOCK FORM */}
                             {modalMode === 'stocks' && <>
-                                <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingStock ? 'Edit Holding' : 'Add Holding'}</h3>
+                                <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingStock ? 'Edit Stock' : 'Add Stock'}</h3>
                                 <div className="space-y-4 mb-6">
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Stock Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain} border border-transparent focus:border-indigo-500 transition-colors`} placeholder="Symbol (e.g. 1155.KL, AAPL)" value={stockSymbol} onChange={e=>setStockSymbol(e.target.value)} />
+                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
+                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Symbol (e.g. 1155.KL)" value={stockSymbol} onChange={e=>setStockSymbol(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Cost</label><input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={stockCost} onChange={e=>setStockCost(e.target.value)} /></div>
                                         <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Units</label><input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={stockShares} onChange={e=>setStockShares(e.target.value)} /></div>
                                     </div>
                                     <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Current Price</label><input type="number" className={`w-full p-4 rounded-xl outline-none border border-dashed border-white/20 ${THEME.inputBg} ${THEME.textMain}`} value={stockPrice} onChange={e=>setStockPrice(e.target.value)} /></div>
                                 </div>
-                                <button onClick={handleSaveStock} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingStock ? 'Update Stock' : 'Add Stock'}</button>
+                                <button onClick={handleSaveStock} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>Save</button>
                             </>}
                         </div>
                     </div>}
@@ -617,35 +569,6 @@
                             </div>
                         </div>
                     </div>}
-
-                    {/* RECURRING MODAL */}
-                    {showRecurringModal && <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setShowRecurringModal(false)}></div>
-                        <div className={`w-full max-w-md rounded-3xl p-6 relative border shadow-2xl ${isDarkMode ? 'bg-[#1A1D2D] border-white/10' : 'bg-white border-slate-200'}`}>
-                           <h3 className={`text-lg font-bold mb-4 ${THEME.textMain}`}>Recurring Expenses</h3>
-                           <div className="space-y-3 mb-6 max-h-60 overflow-y-auto">
-                              {recurringRules.length === 0 && <p className="text-xs text-gray-500 text-center">No recurring rules set.</p>}
-                              {recurringRules.map(r => (
-                                <div key={r.id} className="flex justify-between items-center bg-black/10 p-3 rounded-xl">
-                                  <div><p className={`font-bold text-sm ${THEME.textMain}`}>{r.name}</p><p className="text-[10px] text-gray-500">RM{r.amount} on day {r.day}</p></div>
-                                  <button onClick={() => requestDelete(r.id, 'recurring')} className="text-rose-500"><Trash2 size={16}/></button>
-                                </div>
-                              ))}
-                           </div>
-                           <div className="pt-4 border-t border-gray-500/20">
-                              <h4 className="text-xs uppercase font-bold text-gray-500 mb-3">Add New Recurring</h4>
-                              <div className="grid grid-cols-2 gap-3 mb-3">
-                                 <input className={`p-3 rounded-xl text-sm ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name (e.g. Rent)" value={newRecName} onChange={e=>setNewRecName(e.target.value)} />
-                                 <input type="number" className={`p-3 rounded-xl text-sm ${THEME.inputBg} ${THEME.textMain}`} placeholder="Amount" value={newRecAmount} onChange={e=>setNewRecAmount(e.target.value)} />
-                              </div>
-                              <div className="grid grid-cols-2 gap-3 mb-4">
-                                 <select className={`p-3 rounded-xl text-sm ${THEME.inputBg} ${THEME.textMain}`} onChange={e=>setSelectedCat(CATEGORIES.expense.find(c=>c.name===e.target.value))}>{CATEGORIES.expense.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}</select>
-                                 <input type="number" min="1" max="31" className={`p-3 rounded-xl text-sm ${THEME.inputBg} ${THEME.textMain}`} placeholder="Day" value={newRecDay} onChange={e=>setNewRecDay(e.target.value)} />
-                              </div>
-                              <button onClick={() => { if(!newRecName || !newRecAmount) return; setRecurringRules([...recurringRules, {id: Date.now(), name: newRecName, amount: parseFloat(newRecAmount), category: selectedCat.name, day: parseInt(newRecDay), lastRun: ''}]); setNewRecName(''); setNewRecAmount(''); }} className={`w-full py-3 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold`}>Add Rule</button>
-                           </div>
-                        </div>
-                    </div>}
                 </div>
             );
         };
@@ -654,7 +577,7 @@
         root.render(<App />);
     </script>
     
-    <!-- 注册 Service Worker (PWA 的灵魂) -->
+    <!-- 注册 Service Worker -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
