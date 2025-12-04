@@ -36,7 +36,6 @@
     }
     </script>
 
-    <!-- App Logic (Production Build - Clean Data) -->
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
@@ -45,8 +44,47 @@
             PieChart, Briefcase, Landmark, CreditCard, 
             MoreHorizontal, Download, Calculator, Coins, RefreshCw,
             Sun, Moon, Target, CalendarClock, CheckCircle, AlertCircle, Save,
-            ChevronLeft, ChevronRight, Calendar, AlertTriangle, Wifi, WifiOff, Link as LinkIcon
+            ChevronLeft, ChevronRight, Calendar, AlertTriangle
         } from 'lucide-react';
+
+        // --- HELPER: SWIPEABLE ITEM ---
+        const SwipeableItem = ({ children, onDelete, onClick, className = "" }) => {
+            const [offsetX, setOffsetX] = useState(0);
+            const startX = useRef(0);
+            const isDragging = useRef(false);
+
+            // Touch Events
+            const handleTouchStart = (e) => { startX.current = e.touches[0].clientX; isDragging.current = true; };
+            const handleTouchMove = (e) => { if (!isDragging.current) return; const diff = e.touches[0].clientX - startX.current; if (diff < 0 && diff > -100) setOffsetX(diff); };
+            const handleTouchEnd = () => { isDragging.current = false; setOffsetX(offsetX < -40 ? -80 : 0); };
+            
+            // Mouse Events
+            const handleMouseDown = (e) => { startX.current = e.clientX; isDragging.current = true; };
+            const handleMouseMove = (e) => { if (!isDragging.current) return; const diff = e.clientX - startX.current; if (diff < 0 && diff > -100) setOffsetX(diff); };
+            const handleMouseUp = () => { isDragging.current = false; setOffsetX(offsetX < -40 ? -80 : 0); };
+
+            const handleClick = (e) => {
+                if (offsetX < -10) { setOffsetX(0); e.stopPropagation(); }
+                else if (Math.abs(offsetX) < 5 && onClick) onClick();
+            };
+
+            return (
+                <div className={`relative overflow-hidden group ${className}`} onMouseLeave={() => { isDragging.current = false; setOffsetX(0); }}>
+                    <div className="absolute top-0 bottom-0 right-0 w-20 bg-rose-500/20 flex items-center justify-center rounded-2xl z-0">
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(); setOffsetX(0); }} className="p-3 bg-rose-500 text-white rounded-full shadow-lg"><Trash2 size={18} /></button>
+                    </div>
+                    <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
+                         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-lg transition-colors"><Trash2 size={14}/></button>
+                    </div>
+                    <div className="relative z-10 transition-transform duration-200 ease-out h-full" style={{ transform: `translateX(${offsetX}px)` }}
+                        onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
+                        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
+                        onClick={handleClick}>
+                        {children}
+                    </div>
+                </div>
+            );
+        };
 
         const App = () => {
             // --- 1. CONFIGURATION & STATE ---
@@ -64,22 +102,18 @@
                 accentGradient: "from-emerald-400 to-teal-500",
                 navIconActive: "text-emerald-300",
                 navIconInactive: "text-gray-500",
-                cardHover: "active:bg-white/10",
-                deleteBtn: "text-rose-500/50 hover:text-rose-500 hover:bg-rose-500/10"
             } : {
                 mode: 'light',
-                bg: "bg-slate-50", // Updated to cleaner/brighter background
+                bg: "bg-slate-100", 
                 glassCard: "bg-white shadow-lg border border-slate-100",
                 glassNav: "bg-white/80 backdrop-blur-2xl border-t border-slate-200",
                 textMain: "text-slate-800",
-                textMuted: "text-slate-400",
+                textMuted: "text-slate-500",
                 textHighlight: "text-emerald-600",
-                inputBg: "bg-slate-100",
+                inputBg: "bg-slate-50",
                 accentGradient: "from-emerald-500 to-teal-600",
                 navIconActive: "text-emerald-600",
                 navIconInactive: "text-slate-400",
-                cardHover: "active:bg-slate-50",
-                deleteBtn: "text-slate-300 hover:text-rose-500 hover:bg-rose-50"
             };
 
             const [activeTab, setActiveTab] = useState('accounts'); 
@@ -87,17 +121,13 @@
             const [modalMode, setModalMode] = useState('ledger'); 
             const [showRecurringModal, setShowRecurringModal] = useState(false);
             const [deleteTarget, setDeleteTarget] = useState(null); 
-            const [isOnline, setIsOnline] = useState(window.navigator.onLine);
-            const [isFetching, setIsFetching] = useState(false);
-            const [lastUpdated, setLastUpdated] = useState(null); 
-
-            // Data - CLEAN INITIAL STATE (Empty Arrays)
+            
+            // Data (CLEAN STATE)
             const [transactions, setTransactions] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-ledger-pro')) || []; } catch { return []; } });
             const [stocks, setStocks] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-stocks-pro')) || []; } catch { return []; } });
             const [accounts, setAccounts] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-accounts-pro')) || []; } catch { return []; } });
             const [budgets, setBudgets] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-budgets-pro')) || []; } catch { return []; } });
             const [recurringRules, setRecurringRules] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-recurring-pro')) || []; } catch { return []; } });
-            const [dataSourceUrl, setDataSourceUrl] = useState(() => localStorage.getItem('aurora-data-source') || '');
             const [currentLedgerDate, setCurrentLedgerDate] = useState(new Date());
 
             // Persistence
@@ -106,7 +136,6 @@
             useEffect(() => { localStorage.setItem('aurora-accounts-pro', JSON.stringify(accounts)); }, [accounts]);
             useEffect(() => { localStorage.setItem('aurora-budgets-pro', JSON.stringify(budgets)); }, [budgets]);
             useEffect(() => { localStorage.setItem('aurora-recurring-pro', JSON.stringify(recurringRules)); }, [recurringRules]);
-            useEffect(() => { localStorage.setItem('aurora-data-source', dataSourceUrl); }, [dataSourceUrl]);
 
             // --- 2. HELPERS ---
             const formatMoney = (n) => new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR', minimumFractionDigits: 2 }).format(n || 0);
@@ -133,89 +162,54 @@
                 ]
             }), [isDarkMode]);
 
-            // --- 3. API LOGIC ---
-            const fetchLivePrices = async () => {
-                if (!isOnline) { alert("No internet connection."); return; }
-                setIsFetching(true);
-                if (dataSourceUrl && dataSourceUrl.includes('google.com/spreadsheets')) {
-                    try {
-                        const response = await fetch(dataSourceUrl);
-                        const csvText = await response.text();
-                        const lines = csvText.split('\n');
-                        const priceMap = {};
-                        lines.forEach(line => {
-                            const [symbol, price] = line.split(',');
-                            if (symbol && price) {
-                                const cleanPrice = parseFloat(price.replace(/[^0-9.]/g, ''));
-                                if (!isNaN(cleanPrice)) priceMap[symbol.trim().toUpperCase()] = cleanPrice;
-                            }
-                        });
-                        const updatedStocks = stocks.map(s => {
-                            const sSym = s.symbol.toUpperCase().trim();
-                            const match = priceMap[sSym] || priceMap[sSym.split('.')[0]];
-                            return match ? { ...s, currentPrice: match } : s;
-                        });
-                        setStocks(updatedStocks);
-                        setLastUpdated(new Date().toLocaleTimeString());
-                        setTimeout(() => setIsFetching(false), 500);
-                    } catch { alert("Google Sheet Error. Trying Yahoo."); fetchYahooPrices(); }
-                } else { fetchYahooPrices(); }
-            };
-
-            const fetchYahooPrices = async () => {
-                const updated = await Promise.all(stocks.map(async (s) => {
-                    try {
-                        let q = s.symbol.toUpperCase();
-                        if (!q.includes('.') && /^\d{4}$/.test(q)) q += '.KL';
-                        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${q}?range=1d&interval=1d`)}`);
-                        const data = await res.json();
-                        const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-                        return price ? { ...s, currentPrice: parseFloat(price.toFixed(3)) } : s;
-                    } catch { return s; }
-                }));
-                setStocks(updated);
-                setLastUpdated(new Date().toLocaleTimeString());
-                setIsFetching(false);
-            };
-
-            // --- 4. EFFECTS ---
-            useEffect(() => {
-                const handleStatusChange = () => setIsOnline(window.navigator.onLine);
-                window.addEventListener('online', handleStatusChange);
-                window.addEventListener('offline', handleStatusChange);
-                return () => {
-                window.removeEventListener('online', handleStatusChange);
-                window.removeEventListener('offline', handleStatusChange);
-                };
-            }, []);
-
+            // --- 3. AUTOMATION: Interest & Recurring ---
             useEffect(() => {
                 if (accounts.length === 0) return;
                 const todayStr = new Date().toLocaleDateString('en-GB');
                 let interestAdded = false;
                 let newTx = [...transactions];
                 let newAcc = [...accounts];
+
                 newAcc = newAcc.map(acc => {
-                    if (acc.interestRate > 0 && acc.lastInterestDate !== todayStr) {
+                    // Only process if rate > 0
+                    if (acc.interestRate > 0) {
                         const lastRun = acc.lastInterestDate || todayStr;
-                        const [d1, m1, y1] = lastRun.split('/').map(Number);
-                        const [d2, m2, y2] = todayStr.split('/').map(Number);
-                        const days = Math.ceil(Math.abs(new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1)) / (86400000));
-                        if (days > 0) {
-                            const interest = (acc.balance * (acc.interestRate / 100) / 365) * days;
-                            if (interest > 0.001) {
-                                acc.balance += interest;
-                                interestAdded = true;
-                                newTx.unshift({ id: Date.now() + Math.random(), type: 'income', amount: interest, cat: CATEGORIES.income.find(c => c.name === 'Interest'), note: `Auto Interest (${acc.name})`, date: todayStr, timestamp: Date.now() });
+                        // Prevent multiple runs today
+                        if (lastRun !== todayStr) {
+                            const [d1, m1, y1] = lastRun.split('/').map(Number);
+                            const [d2, m2, y2] = todayStr.split('/').map(Number);
+                            // Calculate days difference
+                            const diffTime = Math.abs(new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1));
+                            const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                            
+                            if (days > 0) {
+                                const interest = (acc.balance * (acc.interestRate / 100) / 365) * days;
+                                if (interest > 0.001) {
+                                    acc.balance += interest;
+                                    interestAdded = true;
+                                    newTx.unshift({ 
+                                        id: Date.now() + Math.random(), 
+                                        type: 'income', 
+                                        amount: interest, 
+                                        cat: CATEGORIES.income.find(c => c.name === 'Interest') || CATEGORIES.income[0], 
+                                        note: `Auto Interest (${acc.name})`, 
+                                        date: todayStr, 
+                                        timestamp: Date.now() 
+                                    });
+                                }
+                                acc.lastInterestDate = todayStr;
+                                interestAdded = true; 
                             }
-                            acc.lastInterestDate = todayStr;
-                            interestAdded = true; 
                         }
                     }
                     return acc;
                 });
-                if (interestAdded) { setAccounts(newAcc); setTransactions(newTx); }
-            }, [accounts.length]);
+
+                if (interestAdded) {
+                    setAccounts(newAcc);
+                    setTransactions(newTx);
+                }
+            }, [accounts.length]); // Runs on load
 
             useEffect(() => {
                 if (recurringRules.length === 0) return;
@@ -246,15 +240,16 @@
             }, [recurringRules]); 
 
             const getTabAmbience = () => {
-                if (activeTab === 'accounts') return isDarkMode ? { blob1: 'bg-blue-600/20', blob2: 'bg-cyan-500/20' } : { blob1: 'bg-blue-300/40', blob2: 'bg-cyan-200/40' };
-                if (activeTab === 'ledger') return isDarkMode ? { blob1: 'bg-emerald-500/15', blob2: 'bg-teal-600/15' } : { blob1: 'bg-emerald-200/40', blob2: 'bg-teal-200/40' };
-                if (activeTab === 'stocks') return isDarkMode ? { blob1: 'bg-purple-600/20', blob2: 'bg-indigo-500/20' } : { blob1: 'bg-purple-300/40', blob2: 'bg-indigo-200/40' };
-                if (activeTab === 'analytics') return isDarkMode ? { blob1: 'bg-pink-600/20', blob2: 'bg-rose-500/20' } : { blob1: 'bg-pink-300/40', blob2: 'bg-rose-200/40' };
+                // Adjusted colors for Light Mode to be more visible
+                if (activeTab === 'accounts') return isDarkMode ? { blob1: 'bg-blue-600/20', blob2: 'bg-cyan-500/20' } : { blob1: 'bg-blue-400/30', blob2: 'bg-cyan-400/30' };
+                if (activeTab === 'ledger') return isDarkMode ? { blob1: 'bg-emerald-500/15', blob2: 'bg-teal-600/15' } : { blob1: 'bg-emerald-400/30', blob2: 'bg-teal-400/30' };
+                if (activeTab === 'stocks') return isDarkMode ? { blob1: 'bg-purple-600/20', blob2: 'bg-indigo-500/20' } : { blob1: 'bg-purple-400/30', blob2: 'bg-indigo-400/30' };
+                if (activeTab === 'analytics') return isDarkMode ? { blob1: 'bg-pink-600/20', blob2: 'bg-rose-500/20' } : { blob1: 'bg-pink-400/30', blob2: 'bg-rose-400/30' };
                 return { blob1: 'bg-gray-500/10', blob2: 'bg-gray-500/10' };
             };
             const tabAmbience = getTabAmbience();
 
-            // --- 5. FORMS STATE ---
+            // --- 4. FORMS STATE ---
             const [editingTx, setEditingTx] = useState(null);
             const [editingAcc, setEditingAcc] = useState(null);
             const [editingStock, setEditingStock] = useState(null);
@@ -277,7 +272,7 @@
             const [newRecAmount, setNewRecAmount] = useState('');
             const [newRecDay, setNewRecDay] = useState('1');
 
-            // --- 6. DERIVED DATA ---
+            // --- 5. DERIVED DATA ---
             const filteredTransactions = useMemo(() => transactions.filter(t => {
                 const parts = t.date.split('/');
                 return parts.length === 3 && parseInt(parts[1])-1 === currentLedgerDate.getMonth() && parseInt(parts[2]) === currentLedgerDate.getFullYear();
@@ -308,7 +303,7 @@
                 return Object.entries(map).sort((a,b) => b[1] - a[1]);
             }, [filteredTransactions]);
 
-            // --- 7. HANDLERS ---
+            // --- 6. HANDLERS ---
             const handleExport = () => {
                 if (transactions.length === 0) return alert("No records.");
                 const headers = ['Date', 'Type', 'Category', 'Amount', 'Note'];
@@ -332,19 +327,25 @@
                 const formatted = d.toLocaleDateString('en-GB');
                 if(editingTx) setTransactions(transactions.map(t => t.id===editingTx.id ? {...t, type: ledgerType, amount: parseFloat(amount), cat: selectedCat, note: note||'Others', date: formatted, timestamp: d.getTime()} : t));
                 else setTransactions([{id: Date.now(), type: ledgerType, amount: parseFloat(amount), cat: selectedCat, note: note||'Others', date: formatted, timestamp: d.getTime()}, ...transactions]);
-                setIsModalOpen(false); setEditingTx(null); setAmount(''); setNote('');
+                setIsModalOpen(false);
             };
             const openAddAccount = () => { setEditingAcc(null); setAccName(''); setAccBalance(''); setAccInterest(''); setAccType('bank'); setModalMode('account'); setIsModalOpen(true); };
             const openEditAccount = (acc) => { setEditingAcc(acc); setAccName(acc.name); setAccBalance(acc.balance); setAccInterest(acc.interestRate); setAccType(acc.type); setModalMode('account'); setIsModalOpen(true); };
             const handleSaveAccount = () => {
                 if(!accName) return;
                 const bal = parseFloat(accBalance)||0; const rate = parseFloat(accInterest)||0;
-                const icon = accType==='bank'?'🏦':accType==='ewallet'?'📱':accType==='investment'?'📈':'💵';
+                // Icon logic updated for Pocket
+                let icon = '🏦';
+                if (accType === 'ewallet') icon = '📱';
+                else if (accType === 'cash') icon = '💵';
+                else if (accType === 'investment') icon = '📈';
+                else if (accType === 'pocket') icon = '💰';
+                
                 if(editingAcc) setAccounts(accounts.map(a => a.id===editingAcc.id ? {...a, name: accName, type: accType, balance: bal, interestRate: rate, icon} : a));
                 else setAccounts([...accounts, {id: Date.now(), name: accName, type: accType, balance: bal, interestRate: rate, icon, lastInterestDate: new Date().toLocaleDateString('en-GB')}]);
                 setIsModalOpen(false);
             };
-            const openEditStock = (s) => { setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true); };
+            const openEditStock = (s) => { setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol || ''); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true); };
             const openAddStock = () => { setEditingStock(null); setStockName(''); setStockSymbol(''); setStockShares(''); setStockCost(''); setStockPrice(''); setModalMode('stocks'); setIsModalOpen(true); };
             const handleSaveStock = () => {
                 if(!stockSymbol) return;
@@ -403,39 +404,37 @@
                         </div>
                     </div>
 
-                    {/* MAIN CONTENT */}
+                    {/* CONTENT */}
                     <div className="px-6 relative z-10 animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-end mb-4 mt-2">
                             <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white/80' : 'text-slate-700'}`}>
                                 {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics' : 'Investments'}
                             </h2>
                             <div className="flex gap-2">
-                                {activeTab === 'stocks' && <><button onClick={() => setDataSourceUrl(prompt("Google Sheet CSV Link:") || '')} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode ? 'border-white/20 text-white hover:bg-white/10' : 'border-slate-300 text-slate-600 hover:bg-slate-100'} ${dataSourceUrl ? 'text-emerald-400 border-emerald-500/50' : ''}`} title="Link Google Sheet"><LinkIcon size={14} /></button><button onClick={fetchLivePrices} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode?'border-white/20':'border-slate-300'} ${isFetching?'animate-spin':''}`}><RefreshCw size={14}/></button></>}
                                 <button onClick={handleExport} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-emerald-700 bg-emerald-100 border-emerald-200'}`}><Download size={14} /> <span>CSV</span></button>
                             </div>
                         </div>
 
-                        {/* ACCOUNTS TAB (Clean Layout) */}
+                        {/* ACCOUNTS TAB */}
                         {activeTab === 'accounts' && <div className="space-y-3">
                             {accounts.length === 0 && <div className={`text-center py-10 text-sm ${THEME.textMuted}`}>No accounts added. Tap + to add one.</div>}
                             {accounts.map(acc => (
-                                <div key={acc.id} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl relative p-4 ${THEME.cardHover} transition-transform cursor-pointer flex justify-between items-center`}>
-                                    {/* Content */}
-                                    <div className="flex items-center gap-4 flex-1">
-                                        <div className={`text-2xl w-12 h-12 flex items-center justify-center rounded-2xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div>
-                                        <div className="flex flex-col">
-                                            <span className={`text-xs font-medium ${THEME.textMuted} uppercase tracking-wide`}>{acc.name}</span>
-                                            <span className={`text-xl font-bold ${THEME.textMain} mt-0.5`}>{formatMoney(acc.balance)}</span>
-                                            {acc.interestRate > 0 && <span className="flex items-center gap-1 text-[10px] text-emerald-400 mt-1"><TrendingUp size={10}/> {acc.interestRate}%</span>}
+                                <SwipeableItem key={acc.id} onDelete={() => setDeleteTarget({id:acc.id, type:'account'})} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl`}>
+                                    <div className="p-4">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-3"><div className={`text-2xl p-2 rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div><div><h3 className={`font-bold text-sm ${THEME.textMain}`}>{acc.name}</h3>{acc.interestRate > 0 && <span className={`text-[10px] border rounded px-1 ${isDarkMode?'text-emerald-300 border-emerald-500/20':'text-emerald-700 border-emerald-200'}`}>{acc.interestRate}% Int.</span>}</div></div>
+                                            <div className={`font-bold text-lg ${THEME.textMain}`}>{formatMoney(acc.balance)}</div>
                                         </div>
+                                        {acc.interestRate > 0 && <div className={`mt-2 pt-2 border-t flex justify-between items-center ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+                                            <span className={`text-[10px] ${THEME.textMuted}`}>Projected Daily Earn</span>
+                                            <DailyInterestLabel principal={acc.balance} rate={acc.interestRate} />
+                                        </div>}
                                     </div>
-                                    {/* Action (Right) */}
-                                    <button onClick={(e) => { e.stopPropagation(); requestDelete(acc.id, 'account'); }} className={`p-2 rounded-xl transition-colors ${THEME.deleteBtn}`}><Trash2 size={16}/></button>
-                                </div>
+                                </SwipeableItem>
                             ))}
                         </div>}
 
-                        {/* LEDGER TAB (Clean Layout) */}
+                        {/* LEDGER TAB */}
                         {activeTab === 'ledger' && <div className="space-y-4">
                             <div className={`flex justify-between p-3 rounded-2xl ${isDarkMode?'bg-white/5':'bg-slate-200/50'}`}>
                                 <button onClick={() => handleMonthChange(-1)}><ChevronLeft size={20} className={THEME.textMain}/></button>
@@ -449,51 +448,30 @@
                             {groupedTransactions.length === 0 ? <div className={`text-center py-10 ${THEME.textMuted}`}>No records</div> : groupedTransactions.map(g => (
                                 <div key={g.date} className="mb-2">
                                     <div className={`text-[10px] font-bold uppercase tracking-widest mb-2 pl-1 ${THEME.textMuted}`}>{g.displayDate} · {g.dayName}</div>
-                                    <div className="space-y-2">{g.items.map(t => (
-                                        <div key={t.id} onClick={() => openEditTx(t)} className={`${THEME.glassCard} rounded-2xl p-3 flex justify-between items-center ${THEME.cardHover} cursor-pointer`}>
-                                            <div className="flex gap-3 items-center">
-                                                <div className={`text-xl w-10 h-10 flex items-center justify-center rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{t.cat?.icon}</div>
-                                                <div className="flex flex-col">
-                                                    <span className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</span>
-                                                    <span className={`text-[10px] ${THEME.textMuted}`}>{t.note || '-'}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
+                                    <div className="space-y-3">{g.items.map(t => (
+                                        <SwipeableItem key={t.id} onDelete={() => setDeleteTarget({id:t.id, type:'tx'})} onClick={() => openEditTx(t)} className={`${THEME.glassCard} rounded-2xl`}>
+                                            <div className="p-3 flex justify-between items-center">
+                                                <div className="flex gap-3 items-center"><div className={`text-xl w-10 h-10 flex items-center justify-center rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{t.cat?.icon}</div><div><p className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</p><p className={`text-[10px] ${THEME.textMuted}`}>{t.note}</p></div></div>
                                                 <span className={`text-sm font-bold ${t.type==='income'?'text-emerald-500':THEME.textMain}`}>{t.type==='expense'?'-':'+'}{t.amount}</span>
-                                                <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({id:t.id, type:'tx'}); }} className={`p-1.5 rounded-lg transition-colors ${THEME.deleteBtn}`}><Trash2 size={14}/></button>
                                             </div>
-                                        </div>
+                                        </SwipeableItem>
                                     ))}</div>
                                 </div>
                             ))}
                         </div>}
 
-                        {/* STOCKS TAB (Clean Layout) */}
+                        {/* STOCKS TAB */}
                         {activeTab === 'stocks' && <div className="space-y-3">
-                            <div className={`flex items-center justify-between px-2 pb-2 text-[10px] ${isOnline ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                <span className="flex items-center gap-1">{isOnline ? <Wifi size={12}/> : <WifiOff size={12}/>} {isOnline ? 'Online' : 'Offline'} {lastUpdated && `· Updated: ${lastUpdated}`}</span>
-                                <span className={`${THEME.textMuted}`}>{dataSourceUrl ? 'Connected to Sheets' : 'Yahoo Direct Mode'}</span>
-                            </div>
                             {stocks.length === 0 && <div className={`text-center py-10 text-sm ${THEME.textMuted}`}>No holdings added. Tap + to start.</div>}
                             {stocks.map(s => {
                                 const mv = s.currentPrice * s.shares; const isGain = s.currentPrice >= s.avgCost;
                                 return (
-                                    <div key={s.id} onClick={() => {setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true);}} className={`${THEME.glassCard} rounded-2xl p-4 flex justify-between items-center ${THEME.cardHover} cursor-pointer`}>
-                                        <div className="flex items-center gap-4 flex-1">
-                                            <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div>
-                                            <div className="flex flex-col">
-                                                <span className={`text-sm font-bold ${THEME.textMain}`}>{s.name}</span>
-                                                <span className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</span>
-                                            </div>
+                                    <SwipeableItem key={s.id} onDelete={() => setDeleteTarget({id:s.id, type:'stock'})} onClick={() => openEditStock(s)} className={`${THEME.glassCard} rounded-2xl`}>
+                                        <div className="p-4 flex justify-between">
+                                            <div><div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border mb-2 ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div><h3 className={`font-bold text-sm ${THEME.textMain}`}>{s.name}</h3><p className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</p></div>
+                                            <div className="text-right"><div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div><div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div></div>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-right">
-                                                <div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div>
-                                                <div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div>
-                                            </div>
-                                            <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({id:s.id, type:'stock'}); }} className={`p-2 rounded-xl transition-colors ${THEME.deleteBtn}`}><Trash2 size={16}/></button>
-                                        </div>
-                                    </div>
+                                    </SwipeableItem>
                                 )
                             })}
                         </div>}
@@ -537,7 +515,7 @@
                                 <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingAcc ? 'Edit Account' : 'New Account'}</h3>
                                 <div className="space-y-4 mb-6">
                                     <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name" value={accName} onChange={e=>setAccName(e.target.value)} />
-                                    <div className="grid grid-cols-2 gap-4"><select className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={accType} onChange={e=>setAccType(e.target.value)}><option value="bank">Bank</option><option value="ewallet">E-Wallet</option><option value="cash">Cash</option></select><input type="number" className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Balance" value={accBalance} onChange={e=>setAccBalance(e.target.value)} /></div>
+                                    <div className="grid grid-cols-2 gap-4"><select className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={accType} onChange={e=>setAccType(e.target.value)}><option value="bank">Bank</option><option value="ewallet">E-Wallet</option><option value="cash">Cash</option><option value="pocket">Pocket</option><option value="investment">Invest</option></select><input type="number" className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Balance" value={accBalance} onChange={e=>setAccBalance(e.target.value)} /></div>
                                     <input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Interest Rate %" value={accInterest} onChange={e=>setAccInterest(e.target.value)} />
                                 </div>
                                 <button onClick={handleSaveAccount} className={`w-full py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>Save</button>
