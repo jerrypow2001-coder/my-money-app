@@ -64,6 +64,7 @@
                 navIconActive: "text-emerald-300",
                 navIconInactive: "text-gray-500",
                 cardHover: "active:bg-white/10",
+                deleteBtn: "text-rose-500/50 hover:text-rose-500 hover:bg-rose-500/10"
             } : {
                 mode: 'light',
                 bg: "bg-slate-100", 
@@ -77,6 +78,7 @@
                 navIconActive: "text-emerald-600",
                 navIconInactive: "text-slate-400",
                 cardHover: "active:bg-slate-50",
+                deleteBtn: "text-slate-300 hover:text-rose-500 hover:bg-rose-50"
             };
 
             const [activeTab, setActiveTab] = useState('accounts'); 
@@ -85,7 +87,7 @@
             const [showRecurringModal, setShowRecurringModal] = useState(false);
             const [deleteTarget, setDeleteTarget] = useState(null); 
             
-            // Data
+            // Data (CLEAN STATE)
             const [transactions, setTransactions] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-ledger-pro')) || []; } catch { return []; } });
             const [stocks, setStocks] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-stocks-pro')) || []; } catch { return []; } });
             const [accounts, setAccounts] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-accounts-pro')) || []; } catch { return []; } });
@@ -93,9 +95,7 @@
             const [recurringRules, setRecurringRules] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-recurring-pro')) || []; } catch { return []; } });
             const [dataSourceUrl, setDataSourceUrl] = useState(() => localStorage.getItem('aurora-data-source') || '');
             const [currentLedgerDate, setCurrentLedgerDate] = useState(new Date());
-            
-            // Analytics Chart Toggle
-            const [chartType, setChartType] = useState('expense'); // 'expense' or 'income'
+            const [chartType, setChartType] = useState('expense'); 
 
             // Persistence
             useEffect(() => { localStorage.setItem('aurora-ledger-pro', JSON.stringify(transactions)); }, [transactions]);
@@ -130,16 +130,7 @@
                 ]
             }), [isDarkMode]);
 
-            // --- 3. API & AUTOMATION ---
-            const fetchLivePrices = async () => {
-                if (!isOnline) { alert("No internet connection."); return; }
-                setIsFetching(true);
-                // (Google Sheet Logic preserved from previous version)
-                // For brevity, using fallback simulation if URL not present, or actual fetch if URL present
-                // ... (Logic same as before)
-                setTimeout(() => { setIsFetching(false); }, 1000);
-            };
-
+            // --- 3. AUTOMATION ---
             // Interest Automation
             useEffect(() => {
                 if (accounts.length === 0) return;
@@ -159,7 +150,7 @@
                             
                             if (days > 0) {
                                 let interest = (acc.balance * (acc.interestRate / 100) / 365) * days;
-                                interest = parseFloat(interest.toFixed(2));
+                                interest = parseFloat(interest.toFixed(2)); // Round for transaction
 
                                 if (interest > 0) {
                                     acc.balance += interest;
@@ -172,7 +163,7 @@
                                         note: `Auto Interest (${acc.name})`, 
                                         date: todayStr, 
                                         timestamp: Date.now(),
-                                        accountId: acc.id // Link to account
+                                        accountId: acc.id
                                     });
                                 }
                                 acc.lastInterestDate = todayStr;
@@ -189,7 +180,6 @@
                 }
             }, [accounts.length]);
 
-            // Tab Ambience
             const getTabAmbience = () => {
                 if (activeTab === 'accounts') return isDarkMode ? { blob1: 'bg-blue-600/20', blob2: 'bg-cyan-500/20' } : { blob1: 'bg-blue-400/30', blob2: 'bg-cyan-400/30' };
                 if (activeTab === 'ledger') return isDarkMode ? { blob1: 'bg-emerald-500/15', blob2: 'bg-teal-600/15' } : { blob1: 'bg-emerald-400/30', blob2: 'bg-teal-400/30' };
@@ -206,7 +196,7 @@
             const [amount, setAmount] = useState('');
             const [ledgerType, setLedgerType] = useState('expense');
             const [selectedCat, setSelectedCat] = useState(CATEGORIES.expense[0]);
-            const [selectedAccountId, setSelectedAccountId] = useState(''); // NEW: Account Link
+            const [selectedAccountId, setSelectedAccountId] = useState('');
             const [note, setNote] = useState('');
             const [txDate, setTxDate] = useState('');
             const [stockName, setStockName] = useState('');
@@ -249,7 +239,6 @@
             const totalCashSavings = accounts.reduce((a,c) => a + c.balance, 0);
             const totalNetWorth = totalCashSavings + stockMarketVal;
             
-            // Analytics Data (Dynamic based on Chart Type)
             const analyticsData = useMemo(() => {
                 const map = {};
                 filteredTransactions.filter(t => t.type === chartType).forEach(t => map[t.cat?.name || 'Unknown'] = (map[t.cat?.name] || 0) + t.amount);
@@ -280,7 +269,7 @@
                 setModalMode('ledger'); setIsModalOpen(true); 
             };
             const openNewTx = () => { 
-                setEditingTx(null); setAmount(''); setNote(''); setSelectedAccountId(accounts[0]?.id || ''); // Default to first account
+                setEditingTx(null); setAmount(''); setNote(''); setSelectedAccountId(accounts[0]?.id || ''); 
                 setTxDate(new Date().toISOString().split('T')[0]); setModalMode('ledger'); setIsModalOpen(true); 
             };
 
@@ -290,14 +279,10 @@
                 const formatted = d.toLocaleDateString('en-GB');
                 const val = parseFloat(amount);
 
-                // Logic to update Account Balance if new transaction
                 if (!editingTx && selectedAccountId) {
-                    const targetAcc = accounts.find(a => a.id == selectedAccountId); // loose check for string/number
+                    const targetAcc = accounts.find(a => a.id == selectedAccountId); 
                     if (targetAcc) {
-                        const newBalance = ledgerType === 'income' 
-                            ? targetAcc.balance + val 
-                            : targetAcc.balance - val;
-                        
+                        const newBalance = ledgerType === 'income' ? targetAcc.balance + val : targetAcc.balance - val;
                         setAccounts(accounts.map(a => a.id === targetAcc.id ? { ...a, balance: parseFloat(newBalance.toFixed(2)) } : a));
                     }
                 }
@@ -330,7 +315,6 @@
                 setIsModalOpen(false);
             };
 
-            // Stock Handlers
             const openEditStock = (s) => { setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true); };
             const openAddStock = () => { setEditingStock(null); setStockName(''); setStockSymbol(''); setStockShares(''); setStockCost(''); setStockPrice(''); setModalMode('stocks'); setIsModalOpen(true); };
             const handleSaveStock = () => {
@@ -360,7 +344,7 @@
             const DailyInterestLabel = ({ principal, rate }) => {
                 if (!rate) return null;
                 const daily = (principal * (rate / 100)) / 365;
-                return <div className={`text-[10px] font-medium flex items-center gap-1 mt-1 w-fit px-2 py-0.5 rounded ${isDarkMode ? 'bg-emerald-400/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}><TrendingUp size={10} /> +RM{daily.toFixed(2)} / day</div>;
+                return <div className={`text-[10px] font-medium flex items-center gap-1 mt-2 w-fit px-2 py-0.5 rounded ${isDarkMode ? 'bg-emerald-400/10 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}><TrendingUp size={10} /> +RM{daily.toFixed(2)} / day</div>;
             };
 
             return (
@@ -396,10 +380,9 @@
                     <div className="px-6 relative z-10 animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-end mb-4 mt-2">
                             <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white/80' : 'text-slate-700'}`}>
-                                {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics' : 'Investments'}
+                                {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics & Budgets' : 'Investments'}
                             </h2>
                             <div className="flex gap-2">
-                                {activeTab === 'stocks' && <><button onClick={() => setDataSourceUrl(prompt("Google Sheet CSV Link:") || '')} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode ? 'border-white/20 text-white hover:bg-white/10' : 'border-slate-300 text-slate-600 hover:bg-slate-100'} ${dataSourceUrl ? 'text-emerald-400 border-emerald-500/50' : ''}`} title="Link Google Sheet"><LinkIcon size={14} /></button><button onClick={fetchLivePrices} className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${isDarkMode?'border-white/20':'border-slate-300'} ${isFetching?'animate-spin':''}`}><RefreshCw size={14}/></button></>}
                                 <button onClick={handleExport} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-emerald-700 bg-emerald-100 border-emerald-200'}`}><Download size={14} /> <span>CSV</span></button>
                             </div>
                         </div>
@@ -408,19 +391,18 @@
                         {activeTab === 'accounts' && <div className="space-y-3">
                             {accounts.length === 0 && <div className={`text-center py-10 text-sm ${THEME.textMuted}`}>No accounts added. Tap + to add one.</div>}
                             {accounts.map(acc => (
-                                <div key={acc.id} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl relative p-4 ${THEME.cardHover} transition-transform cursor-pointer flex justify-between items-center`}>
-                                    <div className="flex items-center gap-4 flex-1">
-                                        <div className={`text-2xl w-12 h-12 flex items-center justify-center rounded-2xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div>
-                                        <div className="flex flex-col">
-                                            <span className={`text-xs font-medium ${THEME.textMuted} uppercase tracking-wide`}>{acc.name}</span>
-                                            <span className={`text-xl font-bold ${THEME.textMain} mt-0.5`}>{formatMoney(acc.balance)}</span>
-                                            {acc.interestRate > 0 && <span className="flex items-center gap-1 text-[10px] text-emerald-400 mt-1"><TrendingUp size={10}/> {acc.interestRate}%</span>}
+                                <div key={acc.id} onClick={() => openEditAccount(acc)} className={`${THEME.glassCard} rounded-2xl relative p-4 ${THEME.cardHover} transition-transform cursor-pointer`}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`text-2xl w-12 h-12 flex items-center justify-center rounded-2xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{acc.icon}</div>
+                                            <div className="flex flex-col">
+                                                <span className={`text-xs font-bold ${THEME.textMuted} uppercase tracking-wide`}>{acc.name}</span>
+                                                {acc.interestRate > 0 && <span className="flex items-center gap-1 text-[10px] text-emerald-400 mt-0.5"><TrendingUp size={10}/> {acc.interestRate}%</span>}
+                                            </div>
                                         </div>
+                                        <div className={`text-xl font-bold ${THEME.textMain}`}>{formatMoney(acc.balance)}</div>
                                     </div>
-                                    {acc.interestRate > 0 && <div className={`mt-2 pt-2 border-t flex justify-between items-center ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
-                                        <span className={`text-[10px] ${THEME.textMuted}`}>Projected Daily Earn</span>
-                                        <DailyInterestLabel principal={acc.balance} rate={acc.interestRate} />
-                                    </div>}
+                                    {acc.interestRate > 0 && <DailyInterestLabel principal={acc.balance} rate={acc.interestRate} />}
                                 </div>
                             ))}
                         </div>}
@@ -446,13 +428,12 @@
                                                 <div className="flex flex-col">
                                                     <span className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</span>
                                                     <span className={`text-[10px] ${THEME.textMuted} flex items-center gap-1`}>
-                                                        {/* Display Account Name if linked */}
-                                                        {t.accountId && accounts.find(a=>a.id==t.accountId) && <span className="bg-white/10 px-1 rounded">{accounts.find(a=>a.id==t.accountId).name}</span>}
+                                                        {t.accountId && accounts.find(a=>a.id==t.accountId) && <span className={`px-1 rounded ${isDarkMode?'bg-white/10':'bg-slate-200'}`}>{accounts.find(a=>a.id==t.accountId).name}</span>}
                                                         {t.note || '-'}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <span className={`text-sm font-bold ${t.type==='income'?'text-emerald-500':THEME.textMain}`}>{t.type==='expense'?'-':'+'}{t.amount}</span>
+                                            <span className={`text-sm font-bold ${t.type==='income'?'text-emerald-500':THEME.textMain}`}>{t.type==='expense'?'-':'+'}{t.amount.toFixed(2)}</span>
                                         </div>
                                     ))}</div>
                                 </div>
@@ -465,7 +446,7 @@
                             {stocks.map(s => {
                                 const mv = s.currentPrice * s.shares; const isGain = s.currentPrice >= s.avgCost;
                                 return (
-                                    <div key={s.id} onClick={() => {setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true);}} className={`${THEME.glassCard} rounded-2xl p-4 flex justify-between items-center ${THEME.cardHover} cursor-pointer`}>
+                                    <div key={s.id} onClick={() => {setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true);}} className={`${THEME.glassCard} rounded-2xl p-4 flex justify-between items-center cursor-pointer ${THEME.cardHover} transition-all`}>
                                         <div className="flex items-center gap-4 flex-1">
                                             <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border mb-2 ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div>
                                             <div className="flex flex-col">
@@ -482,7 +463,7 @@
                             })}
                         </div>}
 
-                        {/* ANALYTICS TAB (With Toggle) */}
+                        {/* ANALYTICS TAB */}
                         {activeTab === 'analytics' && <div className="space-y-6">
                             <div className="flex justify-center">
                                 <div className={`flex p-1 rounded-xl ${isDarkMode ? 'bg-white/10' : 'bg-slate-200'}`}>
@@ -570,7 +551,7 @@
                             {modalMode === 'stocks' && <>
                                 <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingStock ? 'Edit Stock' : 'Add Stock'}</h3>
                                 <div className="space-y-4 mb-6">
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
+                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Stock Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
                                     <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Symbol (e.g. 1155.KL)" value={stockSymbol} onChange={e=>setStockSymbol(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Cost</label><input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={stockCost} onChange={e=>setStockCost(e.target.value)} /></div>
