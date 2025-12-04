@@ -21,6 +21,9 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         body { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
         input, select { user-select: text; -webkit-user-select: text; }
+        /* Markdown-like styling for AI response */
+        .ai-response ul { list-style-type: disc; margin-left: 1.2em; }
+        .ai-response strong { font-weight: 700; color: #34d399; }
     </style>
 </head>
 <body class="bg-[#0B0C15] text-white">
@@ -44,7 +47,8 @@
             PieChart, Briefcase, Landmark, CreditCard, 
             MoreHorizontal, Download, Calculator, Coins, RefreshCw,
             Sun, Moon, Target, CalendarClock, CheckCircle, AlertCircle, Save,
-            ChevronLeft, ChevronRight, Calendar, AlertTriangle, Wifi, WifiOff, Link as LinkIcon, ArrowRightLeft
+            ChevronLeft, ChevronRight, Calendar, AlertTriangle, Wifi, WifiOff, Link as LinkIcon, ArrowRightLeft,
+            Sparkles, Settings, Key
         } from 'lucide-react';
 
         const App = () => {
@@ -85,17 +89,23 @@
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalMode, setModalMode] = useState('ledger'); 
             const [showRecurringModal, setShowRecurringModal] = useState(false);
+            const [showSettingsModal, setShowSettingsModal] = useState(false); // NEW
             const [deleteTarget, setDeleteTarget] = useState(null); 
             
-            // Data (CLEAN STATE)
+            // Data
             const [transactions, setTransactions] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-ledger-pro')) || []; } catch { return []; } });
             const [stocks, setStocks] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-stocks-pro')) || []; } catch { return []; } });
             const [accounts, setAccounts] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-accounts-pro')) || []; } catch { return []; } });
             const [budgets, setBudgets] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-budgets-pro')) || []; } catch { return []; } });
             const [recurringRules, setRecurringRules] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-recurring-pro')) || []; } catch { return []; } });
-            const [dataSourceUrl, setDataSourceUrl] = useState(() => localStorage.getItem('aurora-data-source') || '');
+            const [apiKey, setApiKey] = useState(() => localStorage.getItem('aurora-api-key') || ''); // NEW: Store Gemini Key
+            
             const [currentLedgerDate, setCurrentLedgerDate] = useState(new Date());
             const [chartType, setChartType] = useState('expense'); 
+            
+            // AI State
+            const [aiAnalysis, setAiAnalysis] = useState('');
+            const [isAiLoading, setIsAiLoading] = useState(false);
 
             // Persistence
             useEffect(() => { localStorage.setItem('aurora-ledger-pro', JSON.stringify(transactions)); }, [transactions]);
@@ -103,7 +113,7 @@
             useEffect(() => { localStorage.setItem('aurora-accounts-pro', JSON.stringify(accounts)); }, [accounts]);
             useEffect(() => { localStorage.setItem('aurora-budgets-pro', JSON.stringify(budgets)); }, [budgets]);
             useEffect(() => { localStorage.setItem('aurora-recurring-pro', JSON.stringify(recurringRules)); }, [recurringRules]);
-            useEffect(() => { localStorage.setItem('aurora-data-source', dataSourceUrl); }, [dataSourceUrl]);
+            useEffect(() => { localStorage.setItem('aurora-api-key', apiKey); }, [apiKey]);
 
             // --- 2. HELPERS ---
             const formatMoney = (n) => new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR', minimumFractionDigits: 2 }).format(n || 0);
@@ -150,7 +160,7 @@
                             
                             if (days > 0) {
                                 let interest = (acc.balance * (acc.interestRate / 100) / 365) * days;
-                                interest = parseFloat(interest.toFixed(2)); // Round for transaction
+                                interest = parseFloat(interest.toFixed(2));
 
                                 if (interest > 0) {
                                     acc.balance += interest;
@@ -245,7 +255,49 @@
                 return Object.entries(map).sort((a,b) => b[1] - a[1]);
             }, [filteredTransactions, chartType]);
 
-            // --- 6. HANDLERS ---
+            // --- 6. HANDLERS & AI ---
+            const callAI = async () => {
+                if (!apiKey) {
+                    setShowSettingsModal(true);
+                    alert("Please enter your Gemini API Key first.");
+                    return;
+                }
+                setIsAiLoading(true);
+                
+                // Prepare prompt data
+                const summary = `
+                    Net Worth: RM${totalNetWorth}
+                    Cash: RM${totalCashSavings}
+                    Stocks: RM${stockMarketVal}
+                    This Month Income: RM${totalIncome}
+                    This Month Expense: RM${totalExpense}
+                    Top Expenses: ${analyticsData.slice(0, 3).map(i => `${i[0]}: RM${i[1]}`).join(', ')}
+                `;
+
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `Act as a financial advisor. Analyze this monthly financial summary and give 3 short, concise, actionable bullet points for advice. Keep it under 50 words. \n\n${summary}`
+                                }]
+                            }]
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.candidates && data.candidates[0].content) {
+                        setAiAnalysis(data.candidates[0].content.parts[0].text);
+                    } else {
+                        setAiAnalysis("Could not generate insight. Check API Key.");
+                    }
+                } catch (error) {
+                    setAiAnalysis("Error connecting to AI.");
+                }
+                setIsAiLoading(false);
+            };
+
             const handleExport = () => {
                 if (transactions.length === 0) return alert("No records.");
                 const headers = ['Date', 'Type', 'Category', 'Account', 'Amount', 'Note'];
@@ -361,7 +413,7 @@
                             </div>
                             <div className="flex items-center gap-3">
                                 <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full transition-all ${isDarkMode ? 'bg-white/10 text-yellow-300' : 'bg-slate-200 text-slate-600'}`}>{isDarkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
-                                <button onClick={() => setShowRecurringModal(true)} className={`p-2 rounded-full transition-all ${isDarkMode ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-800'}`}><MoreHorizontal size={18}/></button>
+                                <button onClick={() => setShowSettingsModal(true)} className={`p-2 rounded-full transition-all ${isDarkMode ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-800'}`}><Settings size={18}/></button>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -380,7 +432,7 @@
                     <div className="px-6 relative z-10 animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-end mb-4 mt-2">
                             <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white/80' : 'text-slate-700'}`}>
-                                {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics & Budgets' : 'Investments'}
+                                {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics' : 'Investments'}
                             </h2>
                             <div className="flex gap-2">
                                 <button onClick={handleExport} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-emerald-700 bg-emerald-100 border-emerald-200'}`}><Download size={14} /> <span>CSV</span></button>
@@ -490,6 +542,17 @@
                                     )) : <div className={`col-span-2 text-center text-xs ${THEME.textMuted}`}>No data available</div>}
                                 </div>
                             </div>
+
+                            {/* AI INSIGHT */}
+                            <div className={`${THEME.glassCard} p-5 rounded-2xl relative overflow-hidden`}>
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className={`text-sm font-bold flex items-center gap-2 ${THEME.textMain}`}><Sparkles size={16} className="text-amber-400" /> AI Insight</h3>
+                                    <button onClick={callAI} disabled={isAiLoading} className={`text-xs px-3 py-1 rounded-full border ${isDarkMode?'border-white/20 hover:bg-white/10':'border-slate-300 hover:bg-slate-200'} ${isAiLoading?'opacity-50':''}`}>{isAiLoading ? 'Thinking...' : 'Analyze'}</button>
+                                </div>
+                                <div className={`text-xs leading-relaxed min-h-[60px] ${THEME.textMuted}`}>
+                                    {aiAnalysis ? <div className="ai-response" dangerouslySetInnerHTML={{__html: aiAnalysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>')}} /> : "Tap Analyze to get AI-powered financial advice based on your current data."}
+                                </div>
+                            </div>
                         </div>}
                     </div>
 
@@ -551,7 +614,7 @@
                             {modalMode === 'stocks' && <>
                                 <h3 className={`text-center text-xs tracking-widest uppercase mb-6 ${THEME.textMuted}`}>{editingStock ? 'Edit Stock' : 'Add Stock'}</h3>
                                 <div className="space-y-4 mb-6">
-                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Stock Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
+                                    <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name (e.g. Maybank)" value={stockName} onChange={e=>setStockName(e.target.value)} />
                                     <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Symbol (e.g. 1155.KL)" value={stockSymbol} onChange={e=>setStockSymbol(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className={`text-[10px] uppercase ${THEME.textMuted}`}>Cost</label><input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={stockCost} onChange={e=>setStockCost(e.target.value)} /></div>
@@ -564,6 +627,30 @@
                                     <button onClick={handleSaveStock} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingStock ? 'Update' : 'Save'}</button>
                                 </div>
                             </>}
+                        </div>
+                    </div>}
+
+                    {/* SETTINGS MODAL */}
+                    {showSettingsModal && <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setShowSettingsModal(false)}></div>
+                        <div className={`w-full max-w-md rounded-3xl p-6 relative border shadow-2xl ${isDarkMode?'bg-[#1A1D2D] border-white/10':'bg-white border-slate-200'}`}>
+                           <h3 className={`text-lg font-bold mb-4 ${THEME.textMain}`}>Settings</h3>
+                           <div className="space-y-4">
+                              <div>
+                                <label className={`text-xs font-bold uppercase mb-1 block ${THEME.textMuted}`}>Gemini API Key</label>
+                                <div className={`flex items-center gap-2 p-3 rounded-xl ${THEME.inputBg}`}>
+                                    <Key size={16} className={THEME.textMuted} />
+                                    <input type="password" placeholder="Paste API Key Here" className={`bg-transparent w-full outline-none text-sm ${THEME.textMain}`} value={apiKey} onChange={e=>setApiKey(e.target.value)} />
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">Required for AI features. Key is stored locally.</p>
+                              </div>
+                              <button onClick={() => {
+                                  if(confirm('Clear ALL data? This cannot be undone.')) {
+                                      localStorage.clear();
+                                      window.location.reload();
+                                  }
+                              }} className="w-full py-3 rounded-xl bg-rose-500/10 text-rose-500 font-bold text-sm">Reset All Data</button>
+                           </div>
                         </div>
                     </div>}
 
