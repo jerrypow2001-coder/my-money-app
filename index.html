@@ -45,7 +45,7 @@
         import { 
             Plus, Trash2, Wallet, TrendingUp, TrendingDown, X, 
             PieChart, Briefcase, Landmark, CreditCard, 
-            MoreHorizontal, Download, Calculator, Coins, RefreshCw,
+            MoreHorizontal, Download, Upload, Calculator, Coins, RefreshCw,
             Sun, Moon, Target, CalendarClock, CheckCircle, AlertCircle, Save,
             ChevronLeft, ChevronRight, Calendar, AlertTriangle, Wifi, WifiOff, Link as LinkIcon, ArrowRightLeft,
             Sparkles, Settings, Key
@@ -54,6 +54,7 @@
         const App = () => {
             // --- 1. CONFIGURATION & STATE ---
             const [isDarkMode, setIsDarkMode] = useState(true);
+            const fileInputRef = useRef(null); // Ref for file upload
             
             const THEME = isDarkMode ? {
                 mode: 'dark',
@@ -88,8 +89,7 @@
             const [activeTab, setActiveTab] = useState('accounts'); 
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [modalMode, setModalMode] = useState('ledger'); 
-            const [showRecurringModal, setShowRecurringModal] = useState(false);
-            const [showSettingsModal, setShowSettingsModal] = useState(false); // NEW
+            const [showSettingsModal, setShowSettingsModal] = useState(false);
             const [deleteTarget, setDeleteTarget] = useState(null); 
             
             // Data
@@ -98,7 +98,7 @@
             const [accounts, setAccounts] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-accounts-pro')) || []; } catch { return []; } });
             const [budgets, setBudgets] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-budgets-pro')) || []; } catch { return []; } });
             const [recurringRules, setRecurringRules] = useState(() => { try { return JSON.parse(localStorage.getItem('aurora-recurring-pro')) || []; } catch { return []; } });
-            const [apiKey, setApiKey] = useState(() => localStorage.getItem('aurora-api-key') || ''); // NEW: Store Gemini Key
+            const [apiKey, setApiKey] = useState(() => localStorage.getItem('aurora-api-key') || ''); 
             
             const [currentLedgerDate, setCurrentLedgerDate] = useState(new Date());
             const [chartType, setChartType] = useState('expense'); 
@@ -218,10 +218,6 @@
             const [accBalance, setAccBalance] = useState('');
             const [accInterest, setAccInterest] = useState('');
             const [accType, setAccType] = useState('bank');
-            const [newBudgetLimit, setNewBudgetLimit] = useState('');
-            const [newRecName, setNewRecName] = useState('');
-            const [newRecAmount, setNewRecAmount] = useState('');
-            const [newRecDay, setNewRecDay] = useState('1');
 
             // --- 5. DERIVED DATA ---
             const filteredTransactions = useMemo(() => transactions.filter(t => {
@@ -298,7 +294,7 @@
                 setIsAiLoading(false);
             };
 
-            const handleExport = () => {
+            const handleExportCsv = () => {
                 if (transactions.length === 0) return alert("No records.");
                 const headers = ['Date', 'Type', 'Category', 'Account', 'Amount', 'Note'];
                 const rows = transactions.map(t => {
@@ -306,7 +302,49 @@
                     return [t.date, t.type, t.cat?.name, accName, t.amount, `"${t.note}"`];
                 });
                 const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-                const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); link.download='export.csv'; link.click();
+                const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'})); link.download='aurora_ledger.csv'; link.click();
+            };
+
+            // --- 7. NEW: IMPORT/EXPORT FULL BACKUP ---
+            const handleBackup = () => {
+                const data = {
+                    transactions, accounts, stocks, budgets, recurringRules, apiKey
+                };
+                const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `aurora_backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+            };
+
+            const handleRestore = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (!data.transactions && !data.accounts && !data.stocks) throw new Error("Invalid file");
+                        
+                        if(confirm("This will replace your current data with the backup file. Continue?")) {
+                            if(data.transactions) localStorage.setItem('aurora-ledger-pro', JSON.stringify(data.transactions));
+                            if(data.stocks) localStorage.setItem('aurora-stocks-pro', JSON.stringify(data.stocks));
+                            if(data.accounts) localStorage.setItem('aurora-accounts-pro', JSON.stringify(data.accounts));
+                            if(data.budgets) localStorage.setItem('aurora-budgets-pro', JSON.stringify(data.budgets));
+                            if(data.recurringRules) localStorage.setItem('aurora-recurring-pro', JSON.stringify(data.recurringRules));
+                            if(data.apiKey) localStorage.setItem('aurora-api-key', data.apiKey);
+                            
+                            alert("Restore successful! Reloading app...");
+                            window.location.reload();
+                        }
+                    } catch (err) {
+                        alert("Error restoring data. Invalid file format.");
+                    }
+                };
+                reader.readAsText(file);
+                // Reset input
+                event.target.value = null;
             };
 
             const handleMonthChange = (direction) => {
@@ -435,7 +473,7 @@
                                 {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics' : 'Investments'}
                             </h2>
                             <div className="flex gap-2">
-                                <button onClick={handleExport} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-emerald-700 bg-emerald-100 border-emerald-200'}`}><Download size={14} /> <span>CSV</span></button>
+                                <button onClick={handleExportCsv} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-emerald-700 bg-emerald-100 border-emerald-200'}`}><Download size={14} /> <span>CSV</span></button>
                             </div>
                         </div>
 
@@ -499,17 +537,17 @@
                                 const mv = s.currentPrice * s.shares; const isGain = s.currentPrice >= s.avgCost;
                                 return (
                                     <div key={s.id} onClick={() => {setEditingStock(s); setStockName(s.name); setStockSymbol(s.symbol); setStockShares(s.shares); setStockCost(s.avgCost); setStockPrice(s.currentPrice); setModalMode('stocks'); setIsModalOpen(true);}} className={`${THEME.glassCard} rounded-2xl p-4 flex justify-between items-center cursor-pointer ${THEME.cardHover} transition-all`}>
-                                        <div className="flex items-center gap-4 flex-1">
-                                            <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border mb-2 ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div>
-                                            <div className="flex flex-col">
-                                                <span className={`text-sm font-bold ${THEME.textMain}`}>{s.name}</span>
-                                                <span className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</span>
+                                            <div className="flex items-center gap-4 flex-1">
+                                                <div className={`w-10 h-10 flex items-center justify-center rounded-xl font-bold text-xs border mb-2 ${isDarkMode?'bg-amber-400/20 border-amber-400/20 text-amber-300':'bg-amber-100 border-amber-200 text-amber-700'}`}>{s.name.substring(0,3).toUpperCase()}</div>
+                                                <div className="flex flex-col">
+                                                    <span className={`text-sm font-bold ${THEME.textMain}`}>{s.name}</span>
+                                                    <span className={`text-[10px] ${THEME.textMuted}`}>{s.shares} units @ {s.avgCost}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div>
-                                            <div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div>
-                                        </div>
+                                            <div className="text-right">
+                                                <div className={`font-bold text-sm ${THEME.textMain}`}>{formatMoney(mv)}</div>
+                                                <div className={`text-[10px] font-bold ${isGain?'text-emerald-500':'text-rose-500'}`}>{isGain?'+':''}{formatMoney(mv - s.avgCost*s.shares)}</div>
+                                            </div>
                                     </div>
                                 )
                             })}
@@ -636,7 +674,22 @@
                         <div className={`w-full max-w-md rounded-3xl p-6 relative border shadow-2xl ${isDarkMode?'bg-[#1A1D2D] border-white/10':'bg-white border-slate-200'}`}>
                            <h3 className={`text-lg font-bold mb-4 ${THEME.textMain}`}>Settings</h3>
                            <div className="space-y-4">
+                              {/* BACKUP & RESTORE */}
                               <div>
+                                <label className={`text-xs font-bold uppercase mb-2 block ${THEME.textMuted}`}>Data Management</label>
+                                <div className="flex gap-2">
+                                    <button onClick={handleBackup} className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 ${isDarkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-100 hover:bg-slate-200'} ${THEME.textMain}`}>
+                                        <Download size={16} /> Backup
+                                    </button>
+                                    <input type="file" accept=".json" ref={fileInputRef} className="hidden" onChange={handleRestore} />
+                                    <button onClick={() => fileInputRef.current.click()} className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 ${isDarkMode ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-100 hover:bg-slate-200'} ${THEME.textMain}`}>
+                                        <Upload size={16} /> Restore
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-2">Backup saves all your data (accounts, transactions, stocks) to a file. Restore loads that file.</p>
+                              </div>
+
+                              <div className="border-t border-white/5 pt-4">
                                 <label className={`text-xs font-bold uppercase mb-1 block ${THEME.textMuted}`}>Gemini API Key</label>
                                 <div className={`flex items-center gap-2 p-3 rounded-xl ${THEME.inputBg}`}>
                                     <Key size={16} className={THEME.textMuted} />
@@ -644,12 +697,13 @@
                                 </div>
                                 <p className="text-[10px] text-gray-500 mt-1">Required for AI features. Key is stored locally.</p>
                               </div>
+                              
                               <button onClick={() => {
                                   if(confirm('Clear ALL data? This cannot be undone.')) {
                                       localStorage.clear();
                                       window.location.reload();
                                   }
-                              }} className="w-full py-3 rounded-xl bg-rose-500/10 text-rose-500 font-bold text-sm">Reset All Data</button>
+                              }} className="w-full py-3 rounded-xl bg-rose-500/10 text-rose-500 font-bold text-sm mt-2">Reset All Data</button>
                            </div>
                         </div>
                     </div>}
@@ -684,5 +738,3 @@
     </script>
 </body>
 </html>
-
-
