@@ -307,7 +307,7 @@
                 return Object.entries(map).sort((a,b) => b[1] - a[1]);
             }, [filteredTransactions, chartType]);
 
-            // --- 6. HANDLERS & AI (UPDATED WITH SDK) ---
+            // --- 6. HANDLERS & AI (UPDATED WITH REAL STOCK FETCHING) ---
             
             const verifyApiKey = async () => {
                 if (!apiKey) {
@@ -334,63 +334,62 @@
                 }
             };
 
+            // *** UPDATED REAL-TIME STOCK FETCHING FUNCTION ***
             const refreshStockPrices = async () => {
-                if (!apiKey) {
-                    setShowSettingsModal(true);
-                    alert("Please set a valid API Key to use AI features.");
-                    return;
-                }
                 if (stocks.length === 0) return alert("No stocks to update.");
                 
                 setIsUpdatingPrices(true);
-                const symbols = stocks.map(s => s.symbol).filter(s => s);
                 
-                if(symbols.length === 0) {
-                    setIsUpdatingPrices(false);
-                    return alert("No valid symbols found.");
-                }
+                // Create a new list to update
+                const updatedStocks = [...stocks];
+                let successCount = 0;
 
-                try {
-                    const genAI = new GoogleGenerativeAI(apiKey);
-                    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                // Loop through each stock and fetch real data
+                for (let i = 0; i < updatedStocks.length; i++) {
+                    const stock = updatedStocks[i];
+                    if (!stock.symbol) continue;
 
-                    // UPDATED PROMPT: STRICTLY ENFORCING CURRENCY AND SYMBOL HANDLING
-                    const prompt = `You are a financial data assistant. I need the approximate last known market closing price for these stock symbols: ${symbols.join(', ')}. 
-                    RULES:
-                    1. Return ONLY a valid JSON object. No markdown formatting, no code blocks.
-                    2. The keys must be the exact symbols provided.
-                    3. The values must be the price as a number (no currency symbols).
-                    4. IMPORTANT: For Malaysian stocks (symbols ending in .KL, e.g., 1155.KL), return the price in MYR (Ringgit). Do NOT convert to USD.
-                    5. For US stocks, return in USD.
-                    6. If you cannot find a price, use null.
-                    
-                    Example Output: {"AAPL": 150.50, "1155.KL": 10.50}`;
-
-                    const result = await model.generateContent(prompt);
-                    const text = result.response.text();
-                    
-                    if (text) {
-                        // Cleanup markdown if AI adds it
-                        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-                        const priceMap = JSON.parse(cleanText);
+                    try {
+                        // 1. We use a free CORS proxy to bypass browser security restrictions
+                        // 2. We hit the Yahoo Finance Chart API which is free and public
+                        const proxyUrl = "https://api.allorigins.win/raw?url=";
+                        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${stock.symbol}?interval=1d&range=1d`;
                         
-                        const newStocks = stocks.map(s => {
-                            if (priceMap[s.symbol] && typeof priceMap[s.symbol] === 'number') {
-                                return { ...s, currentPrice: priceMap[s.symbol] };
-                            }
-                            return s;
-                        });
+                        const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
                         
-                        setStocks(newStocks);
-                        alert("Prices updated based on latest market data (MYR/USD).");
-                    } else {
-                        alert("AI failed to return data.");
+                        if (!response.ok) throw new Error("Network response was not ok");
+                        
+                        const data = await response.json();
+                        
+                        // Yahoo returns data in a nested format. We need to dig for 'regularMarketPrice'
+                        const result = data.chart.result[0];
+                        const price = result.meta.regularMarketPrice;
+                        // const currency = result.meta.currency; // e.g., "MYR" or "USD"
+
+                        if (price) {
+                            updatedStocks[i] = { 
+                                ...stock, 
+                                currentPrice: price
+                            };
+                            successCount++;
+                        }
+                        
+                        // Add a small delay to be polite to the API
+                        await new Promise(r => setTimeout(r, 200)); 
+
+                    } catch (error) {
+                        console.error(`Failed to fetch ${stock.symbol}:`, error);
                     }
-                } catch (error) {
-                    console.error("Stock Update Error:", error);
-                    alert("Failed to update prices. Check network or API Key.");
                 }
+
+                setStocks(updatedStocks);
                 setIsUpdatingPrices(false);
+                
+                if (successCount > 0) {
+                    alert(`Successfully updated ${successCount} stock prices from Yahoo Finance!`);
+                } else {
+                    alert("Failed to update. Please check if your symbols are correct (e.g., 1155.KL).");
+                }
             };
 
             const callAI = async () => {
@@ -846,7 +845,7 @@
                                     </button>
                                 </div>
                                 <p className={`text-[10px] mt-1 transition-colors ${keyStatus==='valid'?'text-emerald-500':keyStatus==='invalid'?'text-rose-500':'text-gray-500'}`}>
-                                    {keyStatus==='valid' ? 'API Key is active and working.' : keyStatus==='invalid' ? 'Invalid API Key. Please check and try again.' : 'Required for AI insights & stock updates.'}
+                                    {keyStatus==='valid' ? 'API Key is active and working.' : keyStatus==='invalid' ? 'Invalid API Key. Please check and try again.' : 'Required for AI insights only.'}
                                 </p>
                               </div>
                               
