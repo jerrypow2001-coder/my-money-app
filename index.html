@@ -51,6 +51,12 @@
         .animate-blob { animation: blob 7s infinite; }
         .animation-delay-2000 { animation-delay: 2s; }
         .animation-delay-4000 { animation-delay: 4s; }
+        
+        @keyframes spin { 
+            from { transform: rotate(0deg); } 
+            to { transform: rotate(360deg); } 
+        }
+        .animate-spin-slow { animation: spin 2s linear infinite; }
     </style>
 </head>
 <body class="bg-[#0B0C15] text-white overflow-hidden">
@@ -75,7 +81,7 @@
             MoreHorizontal, Download, Upload, Calculator, Coins, RefreshCw,
             Sun, Moon, Target, CalendarClock, CheckCircle, AlertCircle, Save,
             ChevronLeft, ChevronRight, Calendar, AlertTriangle, Wifi, WifiOff, Link as LinkIcon, ArrowRightLeft,
-            Sparkles, Settings, Key
+            Sparkles, Settings, Key, ShieldCheck, ShieldAlert
         } from 'lucide-react';
 
         const App = () => {
@@ -133,6 +139,8 @@
             // AI State
             const [aiAnalysis, setAiAnalysis] = useState('');
             const [isAiLoading, setIsAiLoading] = useState(false);
+            const [keyStatus, setKeyStatus] = useState('none'); // 'none', 'verifying', 'valid', 'invalid'
+            const [isUpdatingPrices, setIsUpdatingPrices] = useState(false);
 
             // Persistence
             useEffect(() => { localStorage.setItem('aurora-ledger-pro', JSON.stringify(transactions)); }, [transactions]);
@@ -302,6 +310,94 @@
             }, [filteredTransactions, chartType]);
 
             // --- 6. HANDLERS & AI ---
+            const verifyApiKey = async () => {
+                if (!apiKey) {
+                    alert("Please enter an API Key first.");
+                    return;
+                }
+                setKeyStatus('verifying');
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: "Hello" }] }]
+                        })
+                    });
+                    if (response.ok) {
+                        setKeyStatus('valid');
+                    } else {
+                        setKeyStatus('invalid');
+                    }
+                } catch (e) {
+                    setKeyStatus('invalid');
+                }
+            };
+
+            const refreshStockPrices = async () => {
+                if (!apiKey) {
+                    setShowSettingsModal(true);
+                    alert("Please set a valid API Key to use AI features.");
+                    return;
+                }
+                if (stocks.length === 0) return alert("No stocks to update.");
+                
+                setIsUpdatingPrices(true);
+                const symbols = stocks.map(s => s.symbol).filter(s => s);
+                
+                if(symbols.length === 0) {
+                    setIsUpdatingPrices(false);
+                    return alert("No valid symbols found.");
+                }
+
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `You are a financial data assistant. I need the approximate last known market price for these stock symbols: ${symbols.join(', ')}. 
+                                    
+                                    IMPORTANT:
+                                    1. Return ONLY a valid JSON object. No markdown formatting, no code blocks.
+                                    2. The keys must be the exact symbols provided.
+                                    3. The values must be the price as a number (no currency symbols).
+                                    4. If you absolutely cannot find a price, use null.
+                                    
+                                    Example Output: {"AAPL": 150.50, "1155.KL": 8.90}`
+                                }]
+                            }]
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (text) {
+                        // Cleanup markdown if AI adds it despite instructions
+                        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                        const priceMap = JSON.parse(cleanText);
+                        
+                        const newStocks = stocks.map(s => {
+                            if (priceMap[s.symbol] && typeof priceMap[s.symbol] === 'number') {
+                                return { ...s, currentPrice: priceMap[s.symbol] };
+                            }
+                            return s;
+                        });
+                        
+                        setStocks(newStocks);
+                        alert("Prices updated based on AI estimates.");
+                    } else {
+                        alert("AI failed to return data.");
+                    }
+                } catch (error) {
+                    console.error(error);
+                    alert("Failed to update prices. Check network or API Key.");
+                }
+                setIsUpdatingPrices(false);
+            };
+
             const callAI = async () => {
                 if (!apiKey) {
                     setShowSettingsModal(true);
@@ -526,6 +622,9 @@
                                 {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics' : 'Investments'}
                             </h2>
                             <div className="flex gap-2">
+                                {activeTab === 'stocks' && <button onClick={refreshStockPrices} disabled={isUpdatingPrices} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20' : 'text-indigo-700 bg-indigo-100 border-indigo-200'}`}>
+                                    <RefreshCw size={14} className={isUpdatingPrices ? 'animate-spin-slow' : ''} /> <span>{isUpdatingPrices ? 'Updating...' : 'Auto-Update'}</span>
+                                </button>}
                                 <button onClick={handleExportCsv} className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${isDarkMode ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-emerald-700 bg-emerald-100 border-emerald-200'}`}><Download size={14} /> <span>CSV</span></button>
                             </div>
                         </div>
@@ -745,11 +844,18 @@
 
                               <div className="border-t border-white/5 pt-4">
                                 <label className={`text-xs font-bold uppercase mb-1 block ${THEME.textMuted}`}>Gemini API Key</label>
-                                <div className={`flex items-center gap-2 p-3 rounded-xl ${THEME.inputBg}`}>
-                                    <Key size={16} className={THEME.textMuted} />
-                                    <input type="password" placeholder="Paste API Key Here" className={`bg-transparent w-full outline-none text-sm ${THEME.textMain}`} value={apiKey} onChange={e=>setApiKey(e.target.value)} />
+                                <div className="flex gap-2">
+                                    <div className={`flex items-center gap-2 p-3 rounded-xl flex-1 ${THEME.inputBg} ${keyStatus==='invalid' ? 'border border-rose-500/50' : keyStatus==='valid' ? 'border border-emerald-500/50' : ''}`}>
+                                        <Key size={16} className={THEME.textMuted} />
+                                        <input type="password" placeholder="Paste API Key Here" className={`bg-transparent w-full outline-none text-sm ${THEME.textMain}`} value={apiKey} onChange={e=>{setApiKey(e.target.value); setKeyStatus('none');}} />
+                                    </div>
+                                    <button onClick={verifyApiKey} disabled={!apiKey || keyStatus==='verifying'} className={`px-4 rounded-xl font-bold text-xs flex items-center gap-1 ${keyStatus==='valid' ? 'bg-emerald-500/10 text-emerald-500' : keyStatus==='invalid' ? 'bg-rose-500/10 text-rose-500' : isDarkMode?'bg-white/10':'bg-slate-200'}`}>
+                                        {keyStatus === 'verifying' ? <RefreshCw size={14} className="animate-spin-slow"/> : keyStatus === 'valid' ? <ShieldCheck size={14}/> : keyStatus === 'invalid' ? <ShieldAlert size={14}/> : 'Verify'}
+                                    </button>
                                 </div>
-                                <p className="text-[10px] text-gray-500 mt-1">Required for AI features. Key is stored locally.</p>
+                                <p className={`text-[10px] mt-1 transition-colors ${keyStatus==='valid'?'text-emerald-500':keyStatus==='invalid'?'text-rose-500':'text-gray-500'}`}>
+                                    {keyStatus==='valid' ? 'API Key is active and working.' : keyStatus==='invalid' ? 'Invalid API Key. Please check and try again.' : 'Required for AI insights & stock updates.'}
+                                </p>
                               </div>
                               
                               <button onClick={() => {
