@@ -11,22 +11,49 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Aurora">
     
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/10384/10384161.png">
+    <link rel="manifest" href="manifest.json"> <!-- Ensure this file exists or remove line -->
     
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        body { -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+        body { 
+            -webkit-tap-highlight-color: transparent; 
+            user-select: none; 
+            -webkit-user-select: none; 
+            font-family: 'Outfit', sans-serif;
+        }
         input, select { user-select: text; -webkit-user-select: text; }
+        
         /* Markdown-like styling for AI response */
-        .ai-response ul { list-style-type: disc; margin-left: 1.2em; }
+        .ai-response ul { list-style-type: disc; margin-left: 1.2em; margin-bottom: 0.5em; }
+        .ai-response li { margin-bottom: 0.2em; }
         .ai-response strong { font-weight: 700; color: #34d399; }
+        .ai-response p { margin-bottom: 0.5em; }
+
+        /* Animation Utilities */
+        @keyframes blob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
     </style>
 </head>
-<body class="bg-[#0B0C15] text-white">
+<body class="bg-[#0B0C15] text-white overflow-hidden">
     <div id="root"></div>
 
     <script type="importmap">
@@ -54,7 +81,7 @@
         const App = () => {
             // --- 1. CONFIGURATION & STATE ---
             const [isDarkMode, setIsDarkMode] = useState(true);
-            const fileInputRef = useRef(null); // Ref for file upload
+            const fileInputRef = useRef(null); 
             
             const THEME = isDarkMode ? {
                 mode: 'dark',
@@ -144,7 +171,8 @@
             // Interest Automation
             useEffect(() => {
                 if (accounts.length === 0) return;
-                const todayStr = new Date().toLocaleDateString('en-GB');
+                // Force UK date format for consistency with rest of app
+                const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 let interestAdded = false;
                 let newTx = [...transactions];
                 let newAcc = [...accounts];
@@ -155,6 +183,10 @@
                         if (lastRun !== todayStr) {
                             const [d1, m1, y1] = lastRun.split('/').map(Number);
                             const [d2, m2, y2] = todayStr.split('/').map(Number);
+                            
+                            // Check for invalid dates
+                            if (isNaN(d1) || isNaN(d2)) return acc;
+
                             const diffTime = Math.abs(new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1));
                             const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
                             
@@ -222,18 +254,33 @@
             // --- 5. DERIVED DATA ---
             const filteredTransactions = useMemo(() => transactions.filter(t => {
                 const parts = t.date.split('/');
-                return parts.length === 3 && parseInt(parts[1])-1 === currentLedgerDate.getMonth() && parseInt(parts[2]) === currentLedgerDate.getFullYear();
+                if (parts.length !== 3) return false;
+                // Parse safely
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10);
+                const year = parseInt(parts[2], 10);
+                return month - 1 === currentLedgerDate.getMonth() && year === currentLedgerDate.getFullYear();
             }).sort((a,b) => b.timestamp - a.timestamp), [transactions, currentLedgerDate]);
             
             const groupedTransactions = useMemo(() => {
                 const g = [];
                 filteredTransactions.forEach(t => {
                     const last = g[g.length-1];
-                    if(last && last.date === t.date) last.items.push(t);
-                    else {
-                        const [d, m, y] = t.date.split('/').map(Number);
-                        const dateObj = new Date(y, m-1, d);
-                        g.push({ date: t.date, displayDate: dateObj.toLocaleDateString('en-US', {day:'numeric', month:'short'}), dayName: dateObj.toLocaleDateString('en-US', {weekday:'short'}), items: [t] });
+                    if(last && last.date === t.date) {
+                        last.items.push(t);
+                    } else {
+                        const parts = t.date.split('/');
+                        // Robust Date Parsing
+                        let dateObj = new Date();
+                        if (parts.length === 3) {
+                             dateObj = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
+                        }
+                        g.push({ 
+                            date: t.date, 
+                            displayDate: dateObj.toLocaleDateString('en-US', {day:'numeric', month:'short'}), 
+                            dayName: dateObj.toLocaleDateString('en-US', {weekday:'short'}), 
+                            items: [t] 
+                        });
                     }
                 });
                 return g;
@@ -247,7 +294,10 @@
             
             const analyticsData = useMemo(() => {
                 const map = {};
-                filteredTransactions.filter(t => t.type === chartType).forEach(t => map[t.cat?.name || 'Unknown'] = (map[t.cat?.name] || 0) + t.amount);
+                filteredTransactions.filter(t => t.type === chartType).forEach(t => {
+                    const catName = t.cat?.name || 'Unknown';
+                    map[catName] = (map[catName] || 0) + t.amount;
+                });
                 return Object.entries(map).sort((a,b) => b[1] - a[1]);
             }, [filteredTransactions, chartType]);
 
@@ -255,7 +305,6 @@
             const callAI = async () => {
                 if (!apiKey) {
                     setShowSettingsModal(true);
-                    alert("Please enter your Gemini API Key first.");
                     return;
                 }
                 setIsAiLoading(true);
@@ -277,7 +326,7 @@
                         body: JSON.stringify({
                             contents: [{
                                 parts: [{
-                                    text: `Act as a financial advisor. Analyze this monthly financial summary and give 3 short, concise, actionable bullet points for advice. Keep it under 50 words. \n\n${summary}`
+                                    text: `Act as a financial advisor. Analyze this monthly financial summary and give 3 short, concise, actionable bullet points for advice. Format in Markdown. Keep it under 60 words. \n\n${summary}`
                                 }]
                             }]
                         })
@@ -286,7 +335,7 @@
                     if (data.candidates && data.candidates[0].content) {
                         setAiAnalysis(data.candidates[0].content.parts[0].text);
                     } else {
-                        setAiAnalysis("Could not generate insight. Check API Key.");
+                        setAiAnalysis("Could not generate insight. Check API Key quota.");
                     }
                 } catch (error) {
                     setAiAnalysis("Error connecting to AI.");
@@ -355,9 +404,12 @@
 
             const openEditTx = (tx) => { 
                 setEditingTx(tx); setAmount(tx.amount); setLedgerType(tx.type); setSelectedCat(tx.cat); setNote(tx.note); setSelectedAccountId(tx.accountId || '');
-                const parts = tx.date.split('/'); if(parts.length===3) setTxDate(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                // Convert DD/MM/YYYY to YYYY-MM-DD for input
+                const parts = tx.date.split('/'); 
+                if(parts.length===3) setTxDate(`${parts[2]}-${parts[1]}-${parts[0]}`);
                 setModalMode('ledger'); setIsModalOpen(true); 
             };
+            
             const openNewTx = () => { 
                 setEditingTx(null); setAmount(''); setNote(''); setSelectedAccountId(accounts[0]?.id || ''); 
                 setTxDate(new Date().toISOString().split('T')[0]); setModalMode('ledger'); setIsModalOpen(true); 
@@ -366,7 +418,8 @@
             const handleSaveTx = () => {
                 if(!amount) return;
                 const d = txDate ? new Date(txDate) : new Date();
-                const formatted = d.toLocaleDateString('en-GB');
+                // Ensure correct day string regardless of timezone
+                const formatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 const val = parseFloat(amount);
 
                 if (!editingTx && selectedAccountId) {
@@ -401,7 +454,7 @@
                 else if (accType === 'pocket') icon = '💰';
                 
                 if(editingAcc) setAccounts(accounts.map(a => a.id===editingAcc.id ? {...a, name: accName, type: accType, balance: bal, interestRate: rate, icon} : a));
-                else setAccounts([...accounts, {id: Date.now(), name: accName, type: accType, balance: bal, interestRate: rate, icon, lastInterestDate: new Date().toLocaleDateString('en-GB')}]);
+                else setAccounts([...accounts, {id: Date.now(), name: accName, type: accType, balance: bal, interestRate: rate, icon, lastInterestDate: new Date().toLocaleDateString('en-GB', {day:'2-digit', month:'2-digit', year:'numeric'})}]);
                 setIsModalOpen(false);
             };
 
@@ -438,9 +491,9 @@
             };
 
             return (
-                <div className={`min-h-screen ${THEME.bg} ${THEME.textMain} relative overflow-hidden selection:bg-teal-500/30 pb-28`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                    <div className={`fixed top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-pulse transition-all duration-1000 ${tabAmbience.blob1}`} />
-                    <div className={`fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[120px] pointer-events-none mix-blend-screen transition-all duration-1000 ${tabAmbience.blob2}`} />
+                <div className={`min-h-screen ${THEME.bg} ${THEME.textMain} relative overflow-hidden selection:bg-teal-500/30 pb-28 transition-colors duration-300`}>
+                    <div className={`fixed top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-blob ${tabAmbience.blob1}`} />
+                    <div className={`fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-blob animation-delay-2000 ${tabAmbience.blob2}`} />
                     
                     {/* HEADER */}
                     <div className="relative pt-8 pb-6 px-6 z-10">
@@ -467,7 +520,7 @@
                     </div>
 
                     {/* CONTENT */}
-                    <div className="px-6 relative z-10 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="px-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="flex justify-between items-end mb-4 mt-2">
                             <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white/80' : 'text-slate-700'}`}>
                                 {activeTab === 'accounts' ? 'My Accounts' : activeTab === 'ledger' ? 'Transactions' : activeTab === 'analytics' ? 'Analytics' : 'Investments'}
@@ -516,7 +569,7 @@
                                             <div className="flex gap-3 items-center">
                                                 <div className={`text-xl w-10 h-10 flex items-center justify-center rounded-xl ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>{t.cat?.icon}</div>
                                                 <div className="flex flex-col">
-                                                    <span className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name}</span>
+                                                    <span className={`text-sm font-bold ${THEME.textMain}`}>{t.cat?.name || 'Unknown'}</span>
                                                     <span className={`text-[10px] ${THEME.textMuted} flex items-center gap-1`}>
                                                         {t.accountId && accounts.find(a=>a.id==t.accountId) && <span className={`px-1 rounded ${isDarkMode?'bg-white/10':'bg-slate-200'}`}>{accounts.find(a=>a.id==t.accountId).name}</span>}
                                                         {t.note || '-'}
@@ -582,13 +635,14 @@
                             </div>
 
                             {/* AI INSIGHT */}
-                            <div className={`${THEME.glassCard} p-5 rounded-2xl relative overflow-hidden`}>
+                            <div className={`${THEME.glassCard} p-5 rounded-2xl relative overflow-hidden transition-all duration-300`}>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className={`text-sm font-bold flex items-center gap-2 ${THEME.textMain}`}><Sparkles size={16} className="text-amber-400" /> AI Insight</h3>
-                                    <button onClick={callAI} disabled={isAiLoading} className={`text-xs px-3 py-1 rounded-full border ${isDarkMode?'border-white/20 hover:bg-white/10':'border-slate-300 hover:bg-slate-200'} ${isAiLoading?'opacity-50':''}`}>{isAiLoading ? 'Thinking...' : 'Analyze'}</button>
+                                    <button onClick={callAI} disabled={isAiLoading} className={`text-xs px-3 py-1 rounded-full border transition-all ${isDarkMode?'border-white/20 hover:bg-white/10':'border-slate-300 hover:bg-slate-200'} ${isAiLoading?'opacity-50 cursor-not-allowed':''}`}>{isAiLoading ? 'Thinking...' : 'Analyze'}</button>
                                 </div>
                                 <div className={`text-xs leading-relaxed min-h-[60px] ${THEME.textMuted}`}>
-                                    {aiAnalysis ? <div className="ai-response" dangerouslySetInnerHTML={{__html: aiAnalysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>')}} /> : "Tap Analyze to get AI-powered financial advice based on your current data."}
+                                    {isAiLoading && <div className="animate-pulse space-y-2"><div className="h-2 bg-slate-700 rounded w-3/4"></div><div className="h-2 bg-slate-700 rounded w-1/2"></div></div>}
+                                    {!isAiLoading && (aiAnalysis ? <div className="ai-response" dangerouslySetInnerHTML={{__html: aiAnalysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>')}} /> : "Tap Analyze to get AI-powered financial advice based on your current data.")}
                                 </div>
                             </div>
                         </div>}
@@ -599,7 +653,7 @@
                         <div className={`${THEME.glassNav} h-16 rounded-[2rem] flex items-center justify-between px-2 shadow-2xl`}>
                             <button onClick={() => setActiveTab('accounts')} className={`p-3 rounded-full transition-all ${activeTab==='accounts' ? THEME.navIconActive : THEME.navIconInactive}`}><Landmark size={20}/></button>
                             <button onClick={() => setActiveTab('ledger')} className={`p-3 rounded-full transition-all ${activeTab==='ledger' ? THEME.navIconActive : THEME.navIconInactive}`}><Wallet size={20}/></button>
-                            <button onClick={handleFabClick} className={`-mt-8 w-14 h-14 bg-gradient-to-tr ${THEME.accentGradient} rounded-full flex items-center justify-center text-white shadow-xl border-4 ${isDarkMode ? 'border-[#0B0C15]' : 'border-slate-50'}`}><Plus size={28} /></button>
+                            <button onClick={handleFabClick} className={`-mt-8 w-14 h-14 bg-gradient-to-tr ${THEME.accentGradient} rounded-full flex items-center justify-center text-white shadow-xl border-4 transform hover:scale-105 transition-transform ${isDarkMode ? 'border-[#0B0C15]' : 'border-slate-50'}`}><Plus size={28} /></button>
                             <button onClick={() => setActiveTab('analytics')} className={`p-3 rounded-full transition-all ${activeTab==='analytics' ? THEME.navIconActive : THEME.navIconInactive}`}><PieChart size={20}/></button>
                             <button onClick={() => setActiveTab('stocks')} className={`p-3 rounded-full transition-all ${activeTab==='stocks' ? THEME.navIconActive : THEME.navIconInactive}`}><Briefcase size={20}/></button>
                         </div>
@@ -607,21 +661,21 @@
 
                     {/* GENERIC MODAL */}
                     {isModalOpen && <div className="fixed inset-0 z-[60] flex items-end justify-center">
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setIsModalOpen(false)}></div>
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={()=>setIsModalOpen(false)}></div>
                         <div className={`w-full max-w-md rounded-t-[2.5rem] p-6 relative border-t animate-in slide-in-from-bottom duration-300 ${isDarkMode ? 'bg-[#1A1D2D] border-white/10' : 'bg-white border-slate-200'}`}>
                             <div className={`w-12 h-1 rounded-full mx-auto mb-6 ${isDarkMode?'bg-white/10':'bg-slate-200'}`}></div>
                             {modalMode === 'ledger' && <>
-                                <div className={`flex p-1 rounded-2xl mb-6 ${isDarkMode?'bg-black/20':'bg-slate-100'}`}>{['expense', 'income'].map(t => <button key={t} onClick={()=>{setLedgerType(t); setSelectedCat(CATEGORIES[t][0])}} className={`flex-1 py-3 rounded-xl text-sm font-bold capitalize ${ledgerType===t ? (isDarkMode?'bg-white/10 text-white':'bg-white text-slate-900 shadow') : 'text-gray-500'}`}>{t}</button>)}</div>
+                                <div className={`flex p-1 rounded-2xl mb-6 ${isDarkMode?'bg-black/20':'bg-slate-100'}`}>{['expense', 'income'].map(t => <button key={t} onClick={()=>{setLedgerType(t); setSelectedCat(CATEGORIES[t][0])}} className={`flex-1 py-3 rounded-xl text-sm font-bold capitalize transition-all ${ledgerType===t ? (isDarkMode?'bg-white/10 text-white':'bg-white text-slate-900 shadow') : 'text-gray-500'}`}>{t}</button>)}</div>
                                 <div className="flex items-end gap-2 mb-6">
                                     <div className="flex-1"><p className={`text-[10px] font-bold mb-1 ${THEME.textMuted}`}>Amount</p><input type="number" placeholder="0.00" autoFocus className={`bg-transparent text-4xl font-bold w-full outline-none ${isDarkMode?'text-white':'text-slate-900'}`} value={amount} onChange={e=>setAmount(e.target.value)}/></div>
-                                    <div><p className={`text-[10px] font-bold mb-1 ${THEME.textMuted}`}>Date</p><input type="date" onClick={(e)=>e.target.showPicker&&e.target.showPicker()} className={`bg-transparent text-sm outline-none w-28 pl-6 cursor-pointer ${THEME.textMain}`} value={txDate} onChange={e=>setTxDate(e.target.value)}/></div>
+                                    <div><p className={`text-[10px] font-bold mb-1 ${THEME.textMuted}`}>Date</p><input type="date" onClick={(e)=>e.target.showPicker&&e.target.showPicker()} className={`bg-transparent text-sm outline-none w-32 pl-4 cursor-pointer text-right ${THEME.textMain}`} value={txDate} onChange={e=>setTxDate(e.target.value)}/></div>
                                 </div>
                                 
                                 {/* Account Selection */}
                                 <div className="mb-4">
                                     <p className={`text-[10px] font-bold mb-2 ${THEME.textMuted}`}>Link Account (Updates Balance)</p>
                                     <select 
-                                        className={`w-full p-3 rounded-xl text-sm outline-none ${THEME.inputBg} ${THEME.textMain}`}
+                                        className={`w-full p-3 rounded-xl text-sm outline-none appearance-none ${THEME.inputBg} ${THEME.textMain}`}
                                         value={selectedAccountId}
                                         onChange={(e) => setSelectedAccountId(e.target.value)}
                                     >
@@ -630,11 +684,11 @@
                                     </select>
                                 </div>
 
-                                <div className="mb-6 flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">{CATEGORIES[ledgerType].map(c => <button key={c.name} onClick={()=>setSelectedCat(c)} className="flex flex-col items-center gap-2 min-w-[64px] snap-center"><div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border-2 ${selectedCat.name===c.name ? `border-emerald-500/50 ${c.color}` : `border-transparent opacity-50 ${isDarkMode?'bg-white/5':'bg-slate-100'}`}`}>{c.icon}</div><span className="text-[10px]">{c.name}</span></button>)}</div>
-                                <input className={`w-full p-4 rounded-xl text-sm mb-4 outline-none border border-transparent focus:border-current ${THEME.inputBg} ${THEME.textMain}`} placeholder="Note (e.g. Others)" value={note} onChange={e=>setNote(e.target.value)} />
+                                <div className="mb-6 flex gap-4 overflow-x-auto pb-4 no-scrollbar snap-x">{CATEGORIES[ledgerType].map(c => <button key={c.name} onClick={()=>setSelectedCat(c)} className="flex flex-col items-center gap-2 min-w-[64px] snap-center"><div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl border-2 transition-all ${selectedCat.name===c.name ? `border-emerald-500/50 ${c.color}` : `border-transparent opacity-50 ${isDarkMode?'bg-white/5':'bg-slate-100'}`}`}>{c.icon}</div><span className="text-[10px]">{c.name}</span></button>)}</div>
+                                <input className={`w-full p-4 rounded-xl text-sm mb-4 outline-none border border-transparent focus:border-white/20 transition-all ${THEME.inputBg} ${THEME.textMain}`} placeholder="Note (e.g. Others)" value={note} onChange={e=>setNote(e.target.value)} />
                                 <div className="flex gap-3">
                                     {editingTx && <button onClick={()=>requestDelete(editingTx.id, 'tx')} className="p-4 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"><Trash2 size={20}/></button>}
-                                    <button onClick={handleSaveTx} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingTx ? 'Update' : 'Save'}</button>
+                                    <button onClick={handleSaveTx} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg active:scale-95 transition-transform`}>{editingTx ? 'Update' : 'Save'}</button>
                                 </div>
                             </>}
                             {modalMode === 'account' && <>
@@ -642,11 +696,11 @@
                                 <div className="space-y-4 mb-6">
                                     <input className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Name" value={accName} onChange={e=>setAccName(e.target.value)} />
                                     <div className="grid grid-cols-2 gap-4"><select className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} value={accType} onChange={e=>setAccType(e.target.value)}><option value="bank">Bank</option><option value="ewallet">E-Wallet</option><option value="cash">Cash</option><option value="pocket">Pocket</option><option value="investment">Invest</option></select><input type="number" className={`p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Balance" value={accBalance} onChange={e=>setAccBalance(e.target.value)} /></div>
-                                    <input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Interest Rate %" value={accInterest} onChange={e=>setAccInterest(e.target.value)} />
+                                    <input type="number" className={`w-full p-4 rounded-xl outline-none ${THEME.inputBg} ${THEME.textMain}`} placeholder="Interest Rate % (Annual)" value={accInterest} onChange={e=>setAccInterest(e.target.value)} />
                                 </div>
                                 <div className="flex gap-3">
                                     {editingAcc && <button onClick={()=>requestDelete(editingAcc.id, 'account')} className="p-4 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"><Trash2 size={20}/></button>}
-                                    <button onClick={handleSaveAccount} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingAcc ? 'Update' : 'Save'}</button>
+                                    <button onClick={handleSaveAccount} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg active:scale-95 transition-transform`}>{editingAcc ? 'Update' : 'Save'}</button>
                                 </div>
                             </>}
                             {modalMode === 'stocks' && <>
@@ -662,7 +716,7 @@
                                 </div>
                                 <div className="flex gap-3">
                                     {editingStock && <button onClick={()=>requestDelete(editingStock.id, 'stock')} className="p-4 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"><Trash2 size={20}/></button>}
-                                    <button onClick={handleSaveStock} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg`}>{editingStock ? 'Update' : 'Save'}</button>
+                                    <button onClick={handleSaveStock} className={`flex-1 py-4 rounded-xl bg-gradient-to-r ${THEME.accentGradient} text-white font-bold shadow-lg active:scale-95 transition-transform`}>{editingStock ? 'Update' : 'Save'}</button>
                                 </div>
                             </>}
                         </div>
@@ -670,8 +724,8 @@
 
                     {/* SETTINGS MODAL */}
                     {showSettingsModal && <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={()=>setShowSettingsModal(false)}></div>
-                        <div className={`w-full max-w-md rounded-3xl p-6 relative border shadow-2xl ${isDarkMode?'bg-[#1A1D2D] border-white/10':'bg-white border-slate-200'}`}>
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={()=>setShowSettingsModal(false)}></div>
+                        <div className={`w-full max-w-md rounded-3xl p-6 relative border shadow-2xl animate-in zoom-in-95 ${isDarkMode?'bg-[#1A1D2D] border-white/10':'bg-white border-slate-200'}`}>
                            <h3 className={`text-lg font-bold mb-4 ${THEME.textMain}`}>Settings</h3>
                            <div className="space-y-4">
                               {/* BACKUP & RESTORE */}
@@ -711,7 +765,7 @@
                     {/* DELETE MODAL */}
                     {deleteTarget && <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={()=>setDeleteTarget(null)}></div>
-                        <div className={`w-full max-w-xs rounded-2xl p-6 relative border shadow-2xl ${isDarkMode?'bg-[#1A1D2D] border-white/10':'bg-white border-slate-200'}`}>
+                        <div className={`w-full max-w-xs rounded-2xl p-6 relative border shadow-2xl animate-in zoom-in-95 ${isDarkMode?'bg-[#1A1D2D] border-white/10':'bg-white border-slate-200'}`}>
                             <h3 className={`text-lg font-bold text-center mb-4 ${THEME.textMain}`}>Confirm Delete?</h3>
                             <div className="flex gap-3">
                                 <button onClick={()=>setDeleteTarget(null)} className={`flex-1 py-3 rounded-xl font-bold text-sm ${isDarkMode?'bg-white/5':'bg-slate-100'}`}>Cancel</button>
@@ -728,11 +782,15 @@
     </script>
     
     <script>
-        if ('serviceWorker' in navigator) {
+        // Check if sw.js actually exists before trying to register, or wrap in try/catch to silence errors in dev
+        if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
                     .then(registration => { console.log('SW registered'); })
-                    .catch(registrationError => { console.log('SW failed: ', registrationError); });
+                    .catch(registrationError => { 
+                        // Silently fail in dev/preview environments
+                        console.log('SW registration skipped (likely dev environment)'); 
+                    });
             });
         }
     </script>
