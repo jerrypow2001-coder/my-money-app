@@ -318,7 +318,7 @@
                 try {
                     // Use SDK
                     const genAI = new GoogleGenerativeAI(apiKey);
-                    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+                    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                     
                     const result = await model.generateContent("Hello");
                     const response = await result.response;
@@ -352,7 +352,7 @@
 
                 try {
                     const genAI = new GoogleGenerativeAI(apiKey);
-                    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+                    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
                     const prompt = `You are a financial data assistant. I need the approximate last known market price for these stock symbols: ${symbols.join(', ')}. 
                     IMPORTANT:
@@ -409,7 +409,7 @@
 
                 try {
                     const genAI = new GoogleGenerativeAI(apiKey);
-                    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+                    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                     
                     const prompt = `Act as a financial advisor. Analyze this monthly financial summary and give 3 short, concise, actionable bullet points for advice. Format in Markdown (use **bold**). Keep it under 60 words. \n\n${summary}`;
 
@@ -891,4 +891,5 @@
     </script>
 </body>
 </html>
+
 
