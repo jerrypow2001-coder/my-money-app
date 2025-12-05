@@ -56,7 +56,7 @@
         .animate-spin-slow { animation: spin 2s linear infinite; }
     </style>
 </head>
-<body class="bg-[#0B0C15] text-white overflow-hidden">
+<body class="bg-[#0B0C15] text-white overflow-x-hidden">
     <div id="root"></div>
 
     <script type="importmap">
@@ -578,7 +578,8 @@
             };
 
             return (
-                <div className={`min-h-screen ${THEME.bg} ${THEME.textMain} relative overflow-hidden selection:bg-teal-500/30 pb-28 transition-colors duration-300`}>
+                // FIXED: Changed overflow-hidden to overflow-x-hidden to allow scrolling
+                <div className={`min-h-screen ${THEME.bg} ${THEME.textMain} relative overflow-x-hidden selection:bg-teal-500/30 pb-28 transition-colors duration-300`}>
                     <div className={`fixed top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-blob ${tabAmbience.blob1}`} />
                     <div className={`fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-blob animation-delay-2000 ${tabAmbience.blob2}`} />
                     
